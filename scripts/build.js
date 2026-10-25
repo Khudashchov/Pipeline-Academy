@@ -1,17 +1,18 @@
 const fs = require('fs');
 const path = require('path');
-const dir = __dirname;
+const root = path.join(__dirname, '..');
+const src = path.join(root, 'src');
 
-function read(name) { return fs.readFileSync(path.join(dir, name), 'utf8'); }
+function read(name) { return fs.readFileSync(path.join(src, name), 'utf8'); }
 
-const style = read('style.css');
-let exprJs = read('expr.js');
-let triggersJs = read('triggers.js');
-let schedulerJs = read('scheduler.js');
-let helpersJs = read('helpers.js');
-let highlightJs = read('highlight.js');
-let lessonsJs = read('lessons.js');
-let appJs = read('app.js');
+const style = read('ui/style.css');
+let exprJs = read('engine/expr.js');
+let triggersJs = read('engine/triggers.js');
+let schedulerJs = read('engine/scheduler.js');
+let helpersJs = read('lessons/helpers.js');
+let highlightJs = read('ui/highlight.js');
+let lessonsJs = read('lessons/lessons.js');
+let appJs = read('ui/app.js');
 
 // Strip the one Node-only require() line so the file runs as a plain concatenated <script> in the
 // browser, where expr.js's top-level functions are already in scope as globals.
@@ -75,6 +76,6 @@ ${appJs}
 </script>
 `;
 
-const outPath = path.join(dir, 'pipeline-academy.html');
+const outPath = path.join(root, 'pipeline-academy.html');
 fs.writeFileSync(outPath, skeleton, 'utf8');
 console.log('Wrote', outPath, '(' + (Buffer.byteLength(skeleton) / 1024).toFixed(1) + ' KB)');

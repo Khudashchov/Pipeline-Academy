@@ -1,7 +1,7 @@
 const yaml = require('js-yaml');
-const { evaluateExpression } = require('./expr.js');
-const H = require('./helpers.js');
-const { MODULES } = require('./lessons.js');
+const { evaluateExpression } = require('../src/engine/expr.js');
+const H = require('../src/lessons/helpers.js');
+const { MODULES } = require('../src/lessons/lessons.js');
 
 function buildApi(rawText) {
   let parsed = null, parses = true;

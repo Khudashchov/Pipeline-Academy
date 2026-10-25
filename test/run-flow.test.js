@@ -1,7 +1,7 @@
 const yaml = require('js-yaml');
-const { evaluateTrigger } = require('./triggers.js');
-const { planRun } = require('./scheduler.js');
-const { MODULES } = require('./lessons.js');
+const { evaluateTrigger } = require('../src/engine/triggers.js');
+const { planRun } = require('../src/engine/scheduler.js');
+const { MODULES } = require('../src/lessons/lessons.js');
 
 const DEFAULT_GITHUB = { repository: 'kpi-labs/orbit-api', actor: 'bohdan', sha: '9f1c3abddeadbeef9f1c3abddeadbeef9f1c3ab', run_number: 128, workflow: 'CI' };
 const DEFAULT_SECRETS = { DEPLOY_TOKEN: 'x', AWS_ROLE_ARN: 'x', AZURE_CLIENT_ID: 'x', AZURE_TENANT_ID: 'x', AZURE_SUBSCRIPTION_ID: 'x', GITHUB_TOKEN: 'x' };

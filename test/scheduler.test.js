@@ -1,5 +1,5 @@
 const yaml = require('js-yaml');
-const { planRun, expandMatrix, topoLevels } = require('./scheduler.js');
+const { planRun, expandMatrix, topoLevels } = require('../src/engine/scheduler.js');
 let pass = 0, fail = 0;
 function check(label, cond) { if (cond) pass++; else { fail++; console.log('FAIL:', label); } }
 

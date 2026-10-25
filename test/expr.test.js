@@ -1,4 +1,4 @@
-const { evaluateExpression, interpolate } = require('./expr.js');
+const { evaluateExpression, interpolate } = require('../src/engine/expr.js');
 let pass = 0, fail = 0;
 function check(label, actual, expected) {
   const ok = JSON.stringify(actual) === JSON.stringify(expected);

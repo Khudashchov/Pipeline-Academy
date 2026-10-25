@@ -17,20 +17,29 @@ to use it; just open it in a browser.
 
 ## How it's built
 
-- `expr.js` — a small parser/evaluator for the subset of GitHub Actions' `${{ }}` expression syntax
+```
+src/
+  engine/    expr.js, triggers.js, scheduler.js   — the GitHub Actions simulation
+  lessons/   lessons.js, helpers.js                — the curriculum and its grading helpers
+  ui/        app.js, highlight.js, style.css       — the browser interface
+scripts/     build.js                              — bundles src/ into pipeline-academy.html
+test/        *.test.js                             — unit and curriculum tests
+```
+
+- `engine/expr.js` — a small parser/evaluator for the subset of GitHub Actions' `${{ }}` expression syntax
   used in `if:` conditions (`success()`, `failure()`, `contains()`, comparisons, `&&`/`||`, context
   paths like `github.ref_name` or `needs.build.outputs.x`).
-- `triggers.js` — evaluates whether a workflow's `on:` block would fire for a simulated event
+- `engine/triggers.js` — evaluates whether a workflow's `on:` block would fire for a simulated event
   (push/pull_request branch & path filters, PR activity types, schedule, workflow_dispatch).
-- `scheduler.js` — builds the job dependency graph from `needs:`, expands `strategy.matrix`
+- `engine/scheduler.js` — builds the job dependency graph from `needs:`, expands `strategy.matrix`
   (including `include`/`exclude`/`fail-fast`), and plans a full run's outcome per job.
-- `helpers.js` — small inspection helpers used by each lesson's grading checks.
-- `highlight.js` — a lightweight line-based YAML syntax highlighter for the editor.
-- `lessons.js` — the curriculum: 33 lessons across 16 modules, each with intro content, starter/
+- `lessons/helpers.js` — small inspection helpers used by each lesson's grading checks.
+- `ui/highlight.js` — a lightweight line-based YAML syntax highlighter for the editor.
+- `lessons/lessons.js` — the curriculum: 33 lessons across 16 modules, each with intro content, starter/
   solution YAML, hints, and a set of grading checks.
-- `app.js` — the UI: editor, sidebar navigation, checklist grading, and the run/animation engine.
-- `style.css` — the design system (an industrial "pipeline signage" palette, IBM Plex Sans/Mono).
-- `build.js` — concatenates the modules above into the single published `pipeline-academy.html`.
+- `ui/app.js` — the UI: editor, sidebar navigation, checklist grading, and the run/animation engine.
+- `ui/style.css` — the design system (an industrial "pipeline signage" palette, IBM Plex Sans/Mono).
+- `scripts/build.js` — concatenates the modules above into the single published `pipeline-academy.html`.
 
 ## Development
 
@@ -41,5 +50,5 @@ npm test           # runs the unit tests for the expression evaluator, trigger l
 npm run build       # rebuilds pipeline-academy.html from the source modules
 ```
 
-Edit the source modules (not `pipeline-academy.html` directly — it's generated), run `npm test`,
+Edit the source modules in `src/` (not `pipeline-academy.html` directly — it's generated), run `npm test`,
 then `npm run build`.

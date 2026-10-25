@@ -1,5 +1,5 @@
 const yaml = require('js-yaml');
-const { evaluateTrigger } = require('./triggers.js');
+const { evaluateTrigger } = require('../src/engine/triggers.js');
 let pass = 0, fail = 0;
 function check(label, cond) { if (cond) pass++; else { fail++; console.log('FAIL:', label); } }
 
