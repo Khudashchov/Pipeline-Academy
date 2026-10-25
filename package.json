@@ -1,0 +1,13 @@
+{
+  "name": "pipeline-academy",
+  "version": "1.0.0",
+  "description": "An interactive, learngitbranching-style course that teaches GitHub Actions CI/CD, with a real YAML editor and a live pipeline simulator.",
+  "private": true,
+  "scripts": {
+    "test": "node test-expr.js && node test-triggers.js && node test-scheduler.js && node test-lessons.js && node test-run-flow.js",
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}

@@ -1,0 +1,3242 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Pipeline Academy</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* ============================================================
+   Pipeline Academy — design tokens
+   Layout: a collapsible left rail of modules beside a two-pane
+   workbench (YAML editor | live run readout) stacked on phone.
+   Palette: industrial pipeline signage — steel/slate neutrals,
+   a safety-amber accent, a pipe-blue for motion/info states.
+   The run console keeps its own fixed dark terminal palette in
+   both page themes, same as GitHub Actions' own log viewer.
+   ============================================================ */
+:root {
+  --bg: hsl(210 24% 96%);
+  --bg-raised: hsl(0 0% 100%);
+  --surface: hsl(210 20% 99%);
+  --surface-sunken: hsl(213 22% 92%);
+  --fg: hsl(215 35% 14%);
+  --muted: hsl(215 15% 40%);
+  --border: hsl(214 20% 83%);
+  --accent: hsl(28 92% 46%);
+  --accent-fg: hsl(0 0% 100%);
+  --accent-soft: hsl(28 92% 46% / 0.12);
+  --pipe: hsl(201 88% 40%);
+  --pipe-soft: hsl(201 88% 40% / 0.12);
+  --success: hsl(142 68% 30%);
+  --success-soft: hsl(142 68% 30% / 0.12);
+  --danger: hsl(4 72% 44%);
+  --danger-soft: hsl(4 72% 44% / 0.12);
+  --skip: hsl(215 12% 50%);
+  --skip-soft: hsl(215 12% 50% / 0.12);
+  --shadow: 0 1px 2px hsl(215 40% 10% / 0.06), 0 8px 24px hsl(215 40% 10% / 0.06);
+  --font-display: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  /* Terminal panel — intentionally constant in both themes, like a real shell. */
+  --term-bg: hsl(220 32% 10%);
+  --term-fg: hsl(210 22% 88%);
+  --term-muted: hsl(215 15% 56%);
+  --term-border: hsl(220 25% 20%);
+  --term-success: hsl(142 65% 58%);
+  --term-danger: hsl(4 88% 70%);
+  --term-accent: hsl(32 95% 62%);
+  --term-pipe: hsl(199 88% 68%);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: hsl(218 26% 9%);
+    --bg-raised: hsl(218 24% 12%);
+    --surface: hsl(218 22% 13%);
+    --surface-sunken: hsl(218 28% 7%);
+    --fg: hsl(210 20% 92%);
+    --muted: hsl(215 15% 64%);
+    --border: hsl(218 18% 23%);
+    --accent: hsl(30 95% 58%);
+    --accent-fg: hsl(222 30% 9%);
+    --accent-soft: hsl(30 95% 58% / 0.16);
+    --pipe: hsl(199 89% 60%);
+    --pipe-soft: hsl(199 89% 60% / 0.16);
+    --success: hsl(142 58% 48%);
+    --success-soft: hsl(142 58% 48% / 0.16);
+    --danger: hsl(4 85% 65%);
+    --danger-soft: hsl(4 85% 65% / 0.16);
+    --skip: hsl(215 12% 58%);
+    --skip-soft: hsl(215 12% 58% / 0.16);
+    --shadow: 0 1px 2px hsl(0 0% 0% / 0.3), 0 8px 24px hsl(0 0% 0% / 0.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: hsl(218 26% 9%);
+  --bg-raised: hsl(218 24% 12%);
+  --surface: hsl(218 22% 13%);
+  --surface-sunken: hsl(218 28% 7%);
+  --fg: hsl(210 20% 92%);
+  --muted: hsl(215 15% 64%);
+  --border: hsl(218 18% 23%);
+  --accent: hsl(30 95% 58%);
+  --accent-fg: hsl(222 30% 9%);
+  --accent-soft: hsl(30 95% 58% / 0.16);
+  --pipe: hsl(199 89% 60%);
+  --pipe-soft: hsl(199 89% 60% / 0.16);
+  --success: hsl(142 58% 48%);
+  --success-soft: hsl(142 58% 48% / 0.16);
+  --danger: hsl(4 85% 65%);
+  --danger-soft: hsl(4 85% 65% / 0.16);
+  --skip: hsl(215 12% 58%);
+  --skip-soft: hsl(215 12% 58% / 0.16);
+  --shadow: 0 1px 2px hsl(0 0% 0% / 0.3), 0 8px 24px hsl(0 0% 0% / 0.35);
+  color-scheme: dark;
+}
+
+/* Several components below set their own `display` (flex/inline-flex) at the same specificity as
+   the browser's built-in `[hidden]` rule, where an author rule can win the tie. Toggling visibility
+   via the `hidden` property must always win, so pin it explicitly rather than relying on that tie. */
+[hidden] { display: none !important; }
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  line-height: 1.5;
+}
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+code { font-family: var(--font-mono); font-size: 0.92em; background: var(--surface-sunken); padding: 0.12em 0.4em; border-radius: 4px; }
+a { color: var(--pipe); }
+button { font-family: var(--font-display); }
+::selection { background: var(--accent-soft); }
+
+.app { min-height: 100%; display: flex; flex-direction: column; }
+
+/* ---------- Top bar ---------- */
+.topbar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  background: var(--bg-raised); border-bottom: 1px solid var(--border);
+}
+.topbar-inner {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px max(16px, env(safe-area-inset-left, 0px)) 12px max(16px, env(safe-area-inset-right, 0px));
+  max-width: 1320px; margin: 0 auto;
+}
+.brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 600; white-space: nowrap; }
+.brand-mark {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px;
+  background: var(--accent); color: var(--accent-fg); font-family: var(--font-mono); font-weight: 600; font-size: 12px;
+}
+.brand-name { font-size: 15px; }
+.sidebar-toggle { display: none; }
+.topbar-spacer { flex: 1; }
+.progress-pill { display: flex; align-items: center; gap: 10px; }
+.progress-track { width: 120px; height: 6px; border-radius: 999px; background: var(--surface-sunken); overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.4s ease; }
+.progress-label { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* ---------- Layout ---------- */
+.layout { flex: 1; display: flex; max-width: 1320px; margin: 0 auto; width: 100%; min-width: 0; }
+.sidebar {
+  width: 272px; flex: 0 0 272px; border-right: 1px solid var(--border);
+  padding: 18px 10px 40px max(10px, env(safe-area-inset-left, 0px));
+  overflow-y: auto; align-self: flex-start; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 57px);
+  max-height: calc(100vh - env(safe-area-inset-top, 0px) - 57px);
+}
+.sidebar-scrim { display: none; }
+.module-group { margin-bottom: 4px; }
+.module-head {
+  display: flex; align-items: baseline; gap: 8px; padding: 10px 10px 4px;
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+.module-head .module-num { color: var(--accent); font-weight: 600; }
+.lesson-link {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  padding: 8px 10px; border-radius: 8px; border: none; background: transparent; color: var(--fg);
+  font-size: 13.5px; cursor: pointer; min-width: 0;
+}
+.lesson-link:hover { background: var(--surface-sunken); }
+.lesson-link.active { background: var(--accent-soft); color: var(--fg); font-weight: 600; }
+.lesson-link .dot {
+  flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--border);
+  display: grid; place-items: center; font-size: 10px; color: transparent;
+}
+.lesson-link.done .dot { background: var(--success); border-color: var(--success); color: var(--bg-raised); }
+.lesson-link.active .dot { border-color: var(--accent); }
+.lesson-link span.label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+.main { flex: 1; min-width: 0; padding: 28px max(16px, env(safe-area-inset-right, 0px)) 80px max(16px, env(safe-area-inset-left, 0px)); }
+
+/* ---------- Lesson header ---------- */
+.lesson-eyebrow { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--pipe); margin-bottom: 8px; }
+.lesson-title { font-size: 28px; font-weight: 700; margin-bottom: 14px; }
+.mission-banner {
+  display: flex; gap: 10px; align-items: flex-start; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 10px; padding: 12px 14px; margin-bottom: 18px;
+}
+.mission-label { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); font-weight: 700; flex: 0 0 auto; padding-top: 2px; }
+.mission-text { font-weight: 500; min-width: 0; }
+
+.lesson-intro { max-width: 72ch; margin-bottom: 22px; color: var(--fg); }
+.lesson-intro p { margin: 0 0 12px; }
+.lesson-intro p.tip { background: var(--pipe-soft); border-left: 3px solid var(--pipe); padding: 10px 12px; border-radius: 0 8px 8px 0; font-size: 14px; }
+.ref-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin: 14px 0; overflow: hidden; }
+.ref-title { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 8px 14px 0; }
+.ref-code { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; padding: 8px 14px 14px; margin: 0; overflow-x: auto; color: var(--fg); }
+.spec-list { margin: 0; padding: 0 14px 14px 30px; }
+.spec-list li { margin-bottom: 6px; }
+
+/* ---------- Workbench ---------- */
+.workbench { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; margin-bottom: 18px; align-items: start; }
+@media (max-width: 880px) { .workbench { grid-template-columns: 1fr; } }
+
+.pane { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; min-width: 0; }
+.pane-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--surface);
+  font-family: var(--font-mono); font-size: 12px; color: var(--muted);
+}
+.editor-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+.editor-wrap { display: flex; position: relative; height: 360px; }
+.editor-gutter {
+  flex: 0 0 auto; background: var(--surface-sunken); color: var(--muted); text-align: right;
+  padding: 14px 10px 14px 14px; font-family: var(--font-mono); font-size: 13.5px; line-height: 1.6;
+  user-select: none; white-space: pre; overflow: hidden;
+}
+.editor-stage { position: relative; flex: 1; min-width: 0; overflow: auto; }
+.editor-highlight, .editor-input {
+  margin: 0; padding: 14px 16px; font-family: var(--font-mono); font-size: 13.5px; line-height: 1.6;
+  white-space: pre; width: max-content; min-width: 100%; min-height: 100%; box-sizing: border-box; tab-size: 2;
+}
+.editor-highlight { color: var(--fg); pointer-events: none; }
+.editor-input {
+  position: absolute; inset: 0; width: 100%; height: 100%; resize: none; border: none; outline: none;
+  background: transparent; color: transparent; caret-color: var(--accent);
+}
+.editor-input::selection { background: var(--accent-soft); }
+.tok-key { color: var(--pipe); font-weight: 600; }
+.tok-str { color: var(--success); }
+.tok-expr { color: var(--accent); font-weight: 600; }
+.tok-comment { color: var(--muted); font-style: italic; }
+
+.error-strip { display: flex; gap: 8px; align-items: flex-start; padding: 10px 14px; background: var(--danger-soft); color: var(--danger); border-top: 1px solid var(--border); font-size: 13px; font-family: var(--font-mono); }
+.hint-box { padding: 10px 14px; border-top: 1px solid var(--border); background: var(--surface); font-size: 13.5px; }
+.hint-box ol { margin: 0; padding-left: 18px; }
+.hint-box li { margin-bottom: 6px; }
+
+.run-pane-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; min-height: 360px; }
+.scenario-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  border: 1px solid var(--border); background: var(--surface); color: var(--fg); border-radius: 999px;
+  padding: 6px 12px; font-size: 12.5px; cursor: pointer; font-family: var(--font-body);
+}
+.chip.active { background: var(--pipe); border-color: var(--pipe); color: #fff; font-weight: 600; }
+
+.run-output { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.run-empty { color: var(--muted); font-size: 13.5px; padding: 20px 4px; text-align: center; }
+.run-banner { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; font-weight: 600; font-size: 13.5px; }
+.run-banner.success { background: var(--success-soft); color: var(--success); }
+.run-banner.failure { background: var(--danger-soft); color: var(--danger); }
+.run-banner.skip { background: var(--skip-soft); color: var(--skip); }
+.run-banner.cancelled { background: var(--skip-soft); color: var(--skip); }
+.trigger-skip { padding: 16px; border: 1px dashed var(--border); border-radius: 10px; color: var(--muted); font-size: 13.5px; }
+.trigger-skip strong { color: var(--fg); display: block; margin-bottom: 4px; }
+
+.dag { display: flex; flex-direction: column; gap: 10px; }
+.dag-arrow { text-align: center; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; }
+.dag-level { display: flex; flex-wrap: wrap; gap: 10px; }
+.dag-node {
+  flex: 1 1 200px; min-width: 190px; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; font-size: 13px; transition: border-color 0.2s ease;
+}
+.dag-node[data-status="running"] { border-left-color: var(--pipe); }
+.dag-node[data-status="success"] { border-left-color: var(--success); }
+.dag-node[data-status="failure"] { border-left-color: var(--danger); }
+.dag-node[data-status="skipped"] { border-left-color: var(--skip); }
+.dag-node[data-status="cancelled"] { border-left-color: var(--skip); }
+.dag-node[data-status="waiting"] { border-left-color: var(--accent); }
+.dag-node-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; }
+.dag-node-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dag-node-matrix { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.status-pill { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; white-space: nowrap; flex: 0 0 auto; }
+.status-pill.pending { background: var(--surface-sunken); color: var(--muted); }
+.status-pill.running { background: var(--pipe-soft); color: var(--pipe); }
+.status-pill.success { background: var(--success-soft); color: var(--success); }
+.status-pill.failure { background: var(--danger-soft); color: var(--danger); }
+.status-pill.skipped, .status-pill.cancelled { background: var(--skip-soft); color: var(--skip); }
+.status-pill.waiting { background: var(--accent-soft); color: var(--accent); }
+.step-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.step-list li { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); min-width: 0; }
+.step-list li .mk { flex: 0 0 auto; width: 13px; text-align: center; }
+.step-list li.done { color: var(--fg); }
+.step-list li.failed { color: var(--danger); font-weight: 600; }
+.step-list li span.t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.approve-row { margin-top: 8px; display: flex; align-items: center; gap: 8px; font-size: 12px; }
+
+.console { background: var(--term-bg); color: var(--term-fg); border: 1px solid var(--term-border); border-radius: 10px; padding: 12px 14px; font-family: var(--font-mono); font-size: 12px; max-height: 260px; overflow-y: auto; }
+.console .line { white-space: pre-wrap; word-break: break-word; line-height: 1.55; }
+.console .line.cmd { color: var(--term-accent); }
+.console .line.ok { color: var(--term-success); }
+.console .line.err { color: var(--term-danger); }
+.console .line.sys { color: var(--term-pipe); font-style: italic; }
+.console .line.dim { color: var(--term-muted); }
+
+/* ---------- Checklist ---------- */
+.checklist-panel { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+.checklist { list-style: none; margin: 0; padding: 6px 0; }
+.checklist li { display: flex; align-items: flex-start; gap: 10px; padding: 9px 16px; font-size: 13.5px; border-bottom: 1px solid var(--border); }
+.checklist li:last-child { border-bottom: none; }
+.checklist li .mk { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; margin-top: 1px; }
+.checklist li.pass .mk { background: var(--success-soft); color: var(--success); }
+.checklist li.fail .mk { background: var(--surface-sunken); color: var(--muted); border: 1.5px dashed var(--border); }
+.checklist li.pass { color: var(--fg); }
+.checklist li.fail { color: var(--muted); }
+.checklist-count { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lesson-complete { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; background: var(--success-soft); flex-wrap: wrap; }
+.lesson-complete-text { font-weight: 600; color: var(--success); }
+
+/* ---------- Buttons ---------- */
+.btn {
+  font-size: 13px; font-weight: 600; border-radius: 8px; border: 1px solid var(--border); background: var(--surface);
+  color: var(--fg); padding: 8px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.btn:hover { filter: brightness(0.97); }
+.btn:focus-visible { outline: 2px solid var(--pipe); outline-offset: 2px; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-ghost { background: transparent; }
+.btn-accent { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn-accent:hover { filter: brightness(1.05); }
+.btn-run { width: 100%; justify-content: center; padding: 11px 14px; font-size: 14px; }
+.btn[disabled] { opacity: 0.55; cursor: default; }
+
+/* ---------- Footer note ---------- */
+.lab-note { max-width: 1320px; margin: 28px auto 0; padding: 0 max(16px, env(safe-area-inset-left, 0px)) 24px max(16px, env(safe-area-inset-right, 0px)); color: var(--muted); font-size: 12.5px; }
+
+/* ---------- Mobile ---------- */
+@media (max-width: 880px) {
+  .brand-name { display: none; }
+  .sidebar-toggle {
+    display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface);
+    color: var(--fg); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; cursor: pointer; font-family: var(--font-body);
+  }
+  .sidebar {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 40; background: var(--bg-raised);
+    width: min(84vw, 320px); max-height: none; padding: calc(env(safe-area-inset-top,0px) + 16px) 10px 24px max(10px, env(safe-area-inset-left, 0px));
+    transform: translateX(-105%); transition: transform 0.25s ease; box-shadow: var(--shadow);
+  }
+  .layout.sidebar-open .sidebar { transform: translateX(0); }
+  .sidebar-scrim {
+    display: none; position: fixed; inset: 0; background: hsl(0 0% 0% / 0.4); z-index: 30;
+  }
+  .layout.sidebar-open .sidebar-scrim { display: block; }
+  .main { padding-top: 20px; }
+  .lesson-title { font-size: 22px; }
+  .editor-wrap { height: 300px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <button class="sidebar-toggle" id="sidebarToggle" type="button">&#9776; Modules</button>
+      <div class="brand"><span class="brand-mark">PA</span><span class="brand-name">Pipeline Academy</span></div>
+      <div class="topbar-spacer"></div>
+      <div class="progress-pill"><div class="progress-track"><div class="progress-fill" id="progressFill"></div></div><span class="progress-label" id="progressLabel">0 / 0</span></div>
+    </div>
+  </header>
+  <div class="layout" id="layout">
+    <div class="sidebar-scrim" id="sidebarScrim"></div>
+    <nav class="sidebar" id="sidebar" aria-label="Curriculum"></nav>
+    <main class="main" id="main"></main>
+  </div>
+</div>
+<p class="lab-note">Pipeline Academy is a simulation: it parses real YAML and follows GitHub Actions' real trigger, dependency, matrix, and expression rules, but no code actually runs and no repository is touched. Progress is saved in this browser only.</p>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+<script>
+// Minimal evaluator for the subset of GitHub Actions expression syntax used in ${{ }} and if: conditions.
+// Supports: literals (true/false/null/numbers/'strings'), ==, !=, >, >=, <, <=, &&, ||, !, (), dotted/bracket
+// property access (github.ref, needs.build.outputs.x, matrix.node), and function calls:
+// success(), failure(), always(), cancelled(), contains(a,b), startsWith(a,b), endsWith(a,b), join(a,b).
+
+function tokenize(src) {
+  const tokens = [];
+  let i = 0;
+  const n = src.length;
+  const isIdentStart = c => /[A-Za-z_]/.test(c);
+  const isIdentPart = c => /[A-Za-z0-9_\-]/.test(c);
+  while (i < n) {
+    const c = src[i];
+    if (/\s/.test(c)) { i++; continue; }
+    if (c === "'") {
+      let j = i + 1, s = '';
+      while (j < n) {
+        if (src[j] === "'" && src[j + 1] === "'") { s += "'"; j += 2; continue; }
+        if (src[j] === "'") { j++; break; }
+        s += src[j]; j++;
+      }
+      tokens.push({ t: 'str', v: s }); i = j; continue;
+    }
+    if (/[0-9]/.test(c) || (c === '-' && /[0-9]/.test(src[i + 1] || ''))) {
+      let j = i + 1;
+      while (j < n && /[0-9.]/.test(src[j])) j++;
+      tokens.push({ t: 'num', v: parseFloat(src.slice(i, j)) }); i = j; continue;
+    }
+    if (c === '=' && src[i + 1] === '=') { tokens.push({ t: 'op', v: '==' }); i += 2; continue; }
+    if (c === '!' && src[i + 1] === '=') { tokens.push({ t: 'op', v: '!=' }); i += 2; continue; }
+    if (c === '>' && src[i + 1] === '=') { tokens.push({ t: 'op', v: '>=' }); i += 2; continue; }
+    if (c === '<' && src[i + 1] === '=') { tokens.push({ t: 'op', v: '<=' }); i += 2; continue; }
+    if (c === '&' && src[i + 1] === '&') { tokens.push({ t: 'op', v: '&&' }); i += 2; continue; }
+    if (c === '|' && src[i + 1] === '|') { tokens.push({ t: 'op', v: '||' }); i += 2; continue; }
+    if ('><'.includes(c)) { tokens.push({ t: 'op', v: c }); i++; continue; }
+    if (c === '!') { tokens.push({ t: 'op', v: '!' }); i++; continue; }
+    if (c === '(') { tokens.push({ t: 'lparen' }); i++; continue; }
+    if (c === ')') { tokens.push({ t: 'rparen' }); i++; continue; }
+    if (c === ',') { tokens.push({ t: 'comma' }); i++; continue; }
+    if (c === '.') { tokens.push({ t: 'dot' }); i++; continue; }
+    if (c === '[') { tokens.push({ t: 'lbrack' }); i++; continue; }
+    if (c === ']') { tokens.push({ t: 'rbrack' }); i++; continue; }
+    if (isIdentStart(c)) {
+      let j = i + 1;
+      while (j < n && isIdentPart(src[j])) j++;
+      const word = src.slice(i, j);
+      const low = word.toLowerCase();
+      if (low === 'true') tokens.push({ t: 'bool', v: true });
+      else if (low === 'false') tokens.push({ t: 'bool', v: false });
+      else if (low === 'null') tokens.push({ t: 'null' });
+      else tokens.push({ t: 'ident', v: word });
+      i = j; continue;
+    }
+    // Unknown character: skip it defensively rather than throw, so odd input degrades gracefully.
+    i++;
+  }
+  return tokens;
+}
+
+function parse(tokens) {
+  let pos = 0;
+  const peek = () => tokens[pos];
+  const next = () => tokens[pos++];
+  function parseOr() {
+    let left = parseAnd();
+    while (peek() && peek().t === 'op' && peek().v === '||') { next(); left = { k: 'or', l: left, r: parseAnd() }; }
+    return left;
+  }
+  function parseAnd() {
+    let left = parseEquality();
+    while (peek() && peek().t === 'op' && peek().v === '&&') { next(); left = { k: 'and', l: left, r: parseEquality() }; }
+    return left;
+  }
+  function parseEquality() {
+    let left = parseRelational();
+    while (peek() && peek().t === 'op' && ['==', '!='].includes(peek().v)) {
+      const op = next().v; left = { k: 'cmp', op, l: left, r: parseRelational() };
+    }
+    return left;
+  }
+  function parseRelational() {
+    let left = parseUnary();
+    while (peek() && peek().t === 'op' && ['>', '>=', '<', '<='].includes(peek().v)) {
+      const op = next().v; left = { k: 'cmp', op, l: left, r: parseUnary() };
+    }
+    return left;
+  }
+  function parseUnary() {
+    if (peek() && peek().t === 'op' && peek().v === '!') { next(); return { k: 'not', v: parseUnary() }; }
+    return parsePrimary();
+  }
+  function parsePrimary() {
+    const tk = peek();
+    if (!tk) return { k: 'lit', v: null };
+    if (tk.t === 'lparen') { next(); const e = parseOr(); if (peek() && peek().t === 'rparen') next(); return e; }
+    if (tk.t === 'str') { next(); return { k: 'lit', v: tk.v }; }
+    if (tk.t === 'num') { next(); return { k: 'lit', v: tk.v }; }
+    if (tk.t === 'bool') { next(); return { k: 'lit', v: tk.v }; }
+    if (tk.t === 'null') { next(); return { k: 'lit', v: null }; }
+    if (tk.t === 'ident') {
+      next();
+      // function call?
+      if (peek() && peek().t === 'lparen') {
+        next();
+        const args = [];
+        if (peek() && peek().t !== 'rparen') {
+          args.push(parseOr());
+          while (peek() && peek().t === 'comma') { next(); args.push(parseOr()); }
+        }
+        if (peek() && peek().t === 'rparen') next();
+        return { k: 'call', name: tk.v.toLowerCase(), args };
+      }
+      // property path
+      const path = [tk.v];
+      while (peek() && (peek().t === 'dot' || peek().t === 'lbrack')) {
+        if (peek().t === 'dot') {
+          next();
+          if (peek() && peek().t === 'ident') path.push(next().v);
+          else if (peek() && peek().t === 'num') path.push(String(next().v));
+        } else {
+          next();
+          if (peek() && (peek().t === 'str' || peek().t === 'num')) path.push(String(next().v));
+          if (peek() && peek().t === 'rbrack') next();
+        }
+      }
+      return { k: 'path', path };
+    }
+    next();
+    return { k: 'lit', v: null };
+  }
+  return parseOr();
+}
+
+function get(ctx, path) {
+  let cur = ctx;
+  for (const key of path) {
+    if (cur == null) return undefined;
+    const lower = key.toLowerCase();
+    if (typeof cur === 'object' && !(key in cur) && lower in cur) cur = cur[lower];
+    else cur = cur[key];
+  }
+  return cur;
+}
+
+function truthy(v) {
+  if (v === undefined || v === null) return false;
+  if (typeof v === 'string') return v.length > 0;
+  if (typeof v === 'number') return v !== 0;
+  if (typeof v === 'boolean') return v;
+  return true;
+}
+
+function toStr(v) {
+  if (v === undefined || v === null) return '';
+  return String(v);
+}
+
+function evalNode(node, ctx) {
+  switch (node.k) {
+    case 'lit': return node.v;
+    case 'path': return get(ctx, node.path);
+    case 'not': return !truthy(evalNode(node.v, ctx));
+    case 'and': {
+      const l = evalNode(node.l, ctx);
+      if (!truthy(l)) return l;
+      return evalNode(node.r, ctx);
+    }
+    case 'or': {
+      const l = evalNode(node.l, ctx);
+      if (truthy(l)) return l;
+      return evalNode(node.r, ctx);
+    }
+    case 'cmp': {
+      const l = evalNode(node.l, ctx);
+      const r = evalNode(node.r, ctx);
+      const bothNum = typeof l === 'number' && typeof r === 'number';
+      const a = bothNum ? l : toStr(l).toLowerCase();
+      const b = bothNum ? r : toStr(r).toLowerCase();
+      switch (node.op) {
+        case '==': return a === b;
+        case '!=': return a !== b;
+        case '>': return a > b;
+        case '>=': return a >= b;
+        case '<': return a < b;
+        case '<=': return a <= b;
+      }
+      return false;
+    }
+    case 'call': {
+      const args = node.args.map(a => evalNode(a, ctx));
+      switch (node.name) {
+        case 'success': return (ctx.__jobStatus || 'success') === 'success';
+        case 'failure': return (ctx.__jobStatus || 'success') === 'failure';
+        case 'cancelled': return (ctx.__jobStatus || 'success') === 'cancelled';
+        case 'always': return true;
+        case 'contains': return toStr(args[0]).toLowerCase().includes(toStr(args[1]).toLowerCase());
+        case 'startswith': return toStr(args[0]).toLowerCase().startsWith(toStr(args[1]).toLowerCase());
+        case 'endswith': return toStr(args[0]).toLowerCase().endsWith(toStr(args[1]).toLowerCase());
+        case 'join': return Array.isArray(args[0]) ? args[0].join(args[1] !== undefined ? toStr(args[1]) : ',') : toStr(args[0]);
+        default: return undefined;
+      }
+    }
+  }
+  return undefined;
+}
+
+// Strips a single ${{ ... }} wrapper if the whole string is exactly one expression; GH Actions `if:`
+// accepts the bare expression (no ${{ }}) too, so we handle both.
+function unwrap(raw) {
+  if (typeof raw !== 'string') return raw;
+  const m = raw.trim().match(/^\$\{\{([\s\S]*)\}\}$/);
+  return m ? m[1].trim() : raw.trim();
+}
+
+function evaluateExpression(raw, ctx) {
+  try {
+    const src = unwrap(raw);
+    const tokens = tokenize(src);
+    const ast = parse(tokens);
+    return evalNode(ast, ctx);
+  } catch (e) {
+    return undefined;
+  }
+}
+
+// Interpolates all ${{ ... }} occurrences inside a free-form string (e.g. a run: command), returning
+// a plain string with each expression replaced by its stringified value. Used for log rendering.
+function interpolate(raw, ctx) {
+  if (typeof raw !== 'string') return raw;
+  return raw.replace(/\$\{\{([\s\S]*?)\}\}/g, (_, inner) => {
+    try {
+      const tokens = tokenize(inner.trim());
+      const ast = parse(tokens);
+      return toStr(evalNode(ast, ctx));
+    } catch (e) {
+      return '';
+    }
+  });
+}
+
+
+
+// Evaluates whether a workflow's `on:` block would fire for a simulated event. Supports the push /
+// pull_request(_target) / schedule / workflow_dispatch / workflow_call shapes used across the lessons,
+// including branch/tag/path filters and pull_request `types:`.
+
+function globToRegExp(glob) {
+  let re = '';
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+    if (c === '*' && glob[i + 1] === '*') { re += '.*'; i++; }
+    else if (c === '*') re += '[^/]*';
+    else if (c === '?') re += '[^/]';
+    else re += c.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  }
+  return new RegExp('^' + re + '$');
+}
+
+function matchesAny(value, patterns) {
+  if (!patterns) return undefined; // not configured -> caller decides default
+  const list = Array.isArray(patterns) ? patterns : [patterns];
+  return list.some(p => globToRegExp(String(p)).test(value));
+}
+
+function normalizeOn(onRaw) {
+  if (onRaw == null) return {};
+  if (typeof onRaw === 'string') return { [onRaw]: null };
+  if (Array.isArray(onRaw)) { const o = {}; onRaw.forEach(k => { o[k] = null; }); return o; }
+  return onRaw;
+}
+
+function evaluateTrigger(onRaw, event) {
+  const on = normalizeOn(onRaw);
+  const name = event.name;
+  if (!(name in on)) return { fires: false, reason: `workflow has no "${name}" trigger configured` };
+  const cfg = on[name] || {};
+
+  if (name === 'push') {
+    if (cfg['branches-ignore'] && matchesAny(event.refName, cfg['branches-ignore'])) return { fires: false, reason: `${event.refName} matches branches-ignore` };
+    if (cfg.branches && !matchesAny(event.refName, cfg.branches)) return { fires: false, reason: `${event.refName} does not match branches filter` };
+    if (cfg['tags-ignore'] && event.isTag && matchesAny(event.refName, cfg['tags-ignore'])) return { fires: false, reason: 'tag matches tags-ignore' };
+    if (cfg.tags && event.isTag && !matchesAny(event.refName, cfg.tags)) return { fires: false, reason: 'tag does not match tags filter' };
+    if (event.paths) {
+      if (cfg['paths-ignore'] && event.paths.every(p => matchesAny(p, cfg['paths-ignore']))) return { fires: false, reason: 'all changed paths match paths-ignore' };
+      if (cfg.paths && !event.paths.some(p => matchesAny(p, cfg.paths))) return { fires: false, reason: 'no changed path matches the paths filter' };
+    }
+    return { fires: true, reason: `push to ${event.refName} matches configured filters` };
+  }
+
+  if (name === 'pull_request' || name === 'pull_request_target') {
+    const defaultTypes = ['opened', 'synchronize', 'reopened'];
+    const types = cfg.types || defaultTypes;
+    if (event.prAction && !types.includes(event.prAction)) return { fires: false, reason: `activity type "${event.prAction}" is not in types: [${types.join(', ')}]` };
+    if (cfg['branches-ignore'] && matchesAny(event.refName, cfg['branches-ignore'])) return { fires: false, reason: `base branch ${event.refName} matches branches-ignore` };
+    if (cfg.branches && !matchesAny(event.refName, cfg.branches)) return { fires: false, reason: `base branch ${event.refName} does not match branches filter` };
+    if (event.paths) {
+      if (cfg['paths-ignore'] && event.paths.every(p => matchesAny(p, cfg['paths-ignore']))) return { fires: false, reason: 'all changed paths match paths-ignore' };
+      if (cfg.paths && !event.paths.some(p => matchesAny(p, cfg.paths))) return { fires: false, reason: 'no changed path matches the paths filter' };
+    }
+    return { fires: true, reason: `${name} (${event.prAction || 'opened'}) targeting ${event.refName} matches configured filters` };
+  }
+
+  if (name === 'schedule') return { fires: true, reason: 'scheduled trigger fired on cron' };
+  if (name === 'workflow_dispatch') return { fires: true, reason: 'manually dispatched from the Actions tab' };
+  if (name === 'workflow_call') return { fires: true, reason: 'invoked by a caller workflow' };
+  return { fires: true, reason: `${name} event received` };
+}
+
+
+
+function toArray(v) {
+  if (v === undefined || v === null) return [];
+  return Array.isArray(v) ? v : [v];
+}
+
+// Cartesian-product expansion of a strategy.matrix block, honoring include/exclude at a basic level.
+function expandMatrix(strategy) {
+  if (!strategy || !strategy.matrix) return [null];
+  const matrix = strategy.matrix;
+  const dims = Object.keys(matrix).filter(k => k !== 'include' && k !== 'exclude' && Array.isArray(matrix[k]));
+  let combos = [{}];
+  for (const dim of dims) {
+    const next = [];
+    for (const combo of combos) for (const val of matrix[dim]) next.push({ ...combo, [dim]: val });
+    combos = next;
+  }
+  if (combos.length === 0) combos = [{}];
+  if (Array.isArray(matrix.exclude)) {
+    combos = combos.filter(c => !matrix.exclude.some(ex => Object.keys(ex).every(k => String(c[k]) === String(ex[k]))));
+  }
+  if (Array.isArray(matrix.include)) {
+    for (const inc of matrix.include) {
+      const matchesExisting = combos.some(c => Object.keys(inc).every(k => dims.includes(k) ? String(c[k]) === String(inc[k]) : true));
+      if (!matchesExisting || dims.length === 0) combos.push({ ...inc });
+      else combos = combos.map(c => Object.keys(inc).every(k => !dims.includes(k) || String(c[k]) === String(inc[k])) ? { ...c, ...inc } : c);
+    }
+  }
+  return combos;
+}
+
+// Kahn's-algorithm topological leveling: jobs with no unresolved `needs` share level 0, etc.
+// Returns { levels: [[jobKey,...], ...], order: [jobKey,...] } or throws on a cycle.
+function topoLevels(jobs) {
+  const keys = Object.keys(jobs);
+  const needsOf = k => toArray(jobs[k].needs).filter(n => keys.includes(n));
+  const remaining = new Set(keys);
+  const levels = [];
+  const order = [];
+  let guard = 0;
+  while (remaining.size > 0 && guard++ < keys.length + 1) {
+    const ready = [...remaining].filter(k => needsOf(k).every(n => !remaining.has(n)));
+    if (ready.length === 0) break; // cycle; bail out, caller treats remaining as unreachable
+    levels.push(ready);
+    ready.forEach(k => { remaining.delete(k); order.push(k); });
+  }
+  if (remaining.size > 0) levels.push([...remaining]); // cyclic leftovers, surfaced rather than hidden
+  return { levels, order, cyclic: remaining.size > 0 };
+}
+
+function aggregateNeedsStatus(needKeys, statusByJob) {
+  if (needKeys.length === 0) return 'success';
+  const statuses = needKeys.map(n => statusByJob[n] || 'success');
+  if (statuses.some(s => s === 'cancelled')) return 'cancelled';
+  if (statuses.some(s => s === 'failure')) return 'failure';
+  if (statuses.some(s => s === 'skipped')) return 'skipped';
+  return 'success';
+}
+
+// faultHook(jobKey, matrixVals, stepIndex, step) => { message } | null  -- marks one step as the
+// scripted point of failure for lessons built around debugging a specific realistic mistake.
+function planRun(workflow, context, faultHook) {
+  const jobs = (workflow && workflow.jobs) || {};
+  const keys = Object.keys(jobs);
+  const { levels, cyclic } = topoLevels(jobs);
+  const statusByJob = {};
+  const outputsByJob = {};
+  const nodes = [];
+  const edges = [];
+
+  levels.forEach((level, levelIdx) => {
+    for (const jobKey of level) {
+      const job = jobs[jobKey] || {};
+      const needKeys = toArray(job.needs).filter(n => keys.includes(n));
+      needKeys.forEach(n => edges.push({ from: n, to: jobKey }));
+      const needsAgg = aggregateNeedsStatus(needKeys, statusByJob);
+      const combos = expandMatrix(job.strategy);
+      const failFast = job.strategy && job.strategy['fail-fast'] === false ? false : true;
+
+      const combosResults = [];
+      let sawFailure = false;
+      combos.forEach((matrixVals, idx) => {
+        const evalCtx = {
+          ...context,
+          needs: { ...context.needs, ...buildNeedsCtx(needKeys, statusByJob, outputsByJob) },
+          matrix: matrixVals || {},
+          __jobStatus: needsAgg,
+        };
+        const ifExpr = job.if !== undefined ? job.if : 'success()';
+        const gatePasses = truthy(evaluateExpression(String(ifExpr), evalCtx));
+
+        let status = 'success';
+        let steps = toArray(job.steps).map((s, i) => ({
+          name: s.name || (s.uses ? `Run ${s.uses}` : (s.run ? s.run.split('\n')[0].slice(0, 60) : `Step ${i + 1}`)),
+          kind: s.uses ? 'uses' : 'run',
+          raw: s,
+          fail: false,
+          failMessage: null,
+        }));
+
+        if (!gatePasses) {
+          status = 'skipped';
+        } else if (failFast && sawFailure) {
+          status = 'cancelled';
+        } else {
+          const fault = faultHook ? faultHook(jobKey, matrixVals, job) : null;
+          if (fault) {
+            sawFailure = true;
+            status = 'failure';
+            const idx2 = Math.max(0, Math.min(steps.length - 1, fault.stepIndex ?? steps.length - 1));
+            if (steps[idx2]) { steps[idx2].fail = true; steps[idx2].failMessage = fault.message; }
+            // steps after the failing one never ran
+            steps = steps.map((s, i) => i > idx2 ? { ...s, kind: s.kind, skippedAfterFailure: true } : s);
+          }
+        }
+
+        combosResults.push({ matrixVals, status, steps, evalCtx });
+      });
+
+      const overallJobStatus = combosResults.some(c => c.status === 'failure') ? 'failure'
+        : combosResults.some(c => c.status === 'cancelled') ? 'cancelled'
+        : combosResults.every(c => c.status === 'skipped') ? 'skipped'
+        : 'success';
+      statusByJob[jobKey] = overallJobStatus;
+      outputsByJob[jobKey] = job.outputs || {};
+
+      combosResults.forEach((c, idx) => {
+        nodes.push({
+          id: combos.length > 1 ? `${jobKey}__${idx}` : jobKey,
+          jobKey,
+          level: levelIdx,
+          label: job.name || jobKey,
+          matrixLabel: c.matrixVals ? Object.entries(c.matrixVals).map(([k, v]) => `${k}: ${v}`).join(', ') : null,
+          needs: needKeys,
+          status: c.status,
+          steps: c.steps,
+          environment: job.environment ? (typeof job.environment === 'string' ? job.environment : job.environment.name) : null,
+          runsOn: job['runs-on'],
+          ctx: c.evalCtx,
+          ifExpr: job.if !== undefined ? String(job.if) : null,
+        });
+      });
+    }
+  });
+
+  const overallStatus = nodes.length === 0 ? 'empty'
+    : nodes.some(n => n.status === 'failure') ? 'failure'
+    : nodes.every(n => n.status === 'skipped') ? 'skipped'
+    : 'success';
+
+  return { nodes, edges, overallStatus, cyclic, levelCount: levels.length };
+}
+
+function buildNeedsCtx(needKeys, statusByJob, outputsByJob) {
+  const out = {};
+  for (const k of needKeys) out[k] = { result: statusByJob[k] || 'success', outputs: outputsByJob[k] || {} };
+  return out;
+}
+
+
+
+// Shared helpers used by lesson check functions to inspect a parsed workflow object.
+
+function Y(...lines) { return lines.join('\n'); }
+
+function toArray(v) { if (v === undefined || v === null) return []; return Array.isArray(v) ? v : [v]; }
+
+function getJobs(parsed) { return (parsed && typeof parsed === 'object' && parsed.jobs) || {}; }
+
+function allSteps(parsed) {
+  const jobs = getJobs(parsed);
+  const out = [];
+  Object.keys(jobs).forEach(jobKey => {
+    toArray(jobs[jobKey] && jobs[jobKey].steps).forEach((step, index) => out.push({ jobKey, index, step }));
+  });
+  return out;
+}
+
+function stepsOf(parsed, jobKey) { const jobs = getJobs(parsed); return toArray(jobs[jobKey] && jobs[jobKey].steps); }
+
+function anyStep(parsed, pred) { return allSteps(parsed).some(({ step }) => { try { return pred(step); } catch (e) { return false; } }); }
+
+function stepInJob(parsed, jobKey, pred) { return stepsOf(parsed, jobKey).some(step => { try { return pred(step); } catch (e) { return false; } }); }
+
+function usesMatches(step, re) { return !!step && typeof step.uses === 'string' && re.test(step.uses); }
+
+function runIncludes(step, re) { return !!step && typeof step.run === 'string' && re.test(step.run); }
+
+function anyStepUses(parsed, re) { return anyStep(parsed, s => usesMatches(s, re)); }
+
+function anyStepRuns(parsed, re) { return anyStep(parsed, s => runIncludes(s, re)); }
+
+function hasJob(parsed, jobKey) { return !!getJobs(parsed)[jobKey]; }
+
+function job(parsed, jobKey) { return getJobs(parsed)[jobKey] || {}; }
+
+function needsOf(parsed, jobKey) { return toArray(job(parsed, jobKey).needs); }
+
+function anyRawLineMatches(raw, re) { return raw.split('\n').some(line => re.test(line)); }
+
+if (typeof module !== 'undefined') {
+  module.exports = { Y, toArray, getJobs, allSteps, stepsOf, anyStep, stepInJob, usesMatches, runIncludes, anyStepUses, anyStepRuns, hasJob, job, needsOf, anyRawLineMatches };
+}
+
+
+// Lightweight line-based YAML syntax highlighter for the editor overlay. Not a full parser -- just
+// enough token recognition to make the editor read like a real one: comments, keys, strings, the
+// ${{ }} expression syntax (GitHub Actions' own notation, worth calling out visually), list dashes,
+// and literals.
+
+function esc(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Splits a line into the code part and a trailing comment, respecting quotes so a '#' inside a
+// string is not mistaken for a comment marker.
+function splitComment(line) {
+  let inSingle = false, inDouble = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === "'" && !inDouble) inSingle = !inSingle;
+    else if (c === '"' && !inSingle) inDouble = !inDouble;
+    else if (c === '#' && !inSingle && !inDouble && (i === 0 || /\s/.test(line[i - 1]))) {
+      return { code: line.slice(0, i), comment: line.slice(i) };
+    }
+  }
+  return { code: line, comment: '' };
+}
+
+// Highlights ${{ ... }} expression spans and quoted strings inside a code fragment (HTML-escaped already not yet; this works on raw text and escapes as it goes).
+function highlightInline(text) {
+  let out = '';
+  let i = 0;
+  const n = text.length;
+  while (i < n) {
+    if (text[i] === '$' && text[i + 1] === '{' && text[i + 2] === '{') {
+      const end = text.indexOf('}}', i + 3);
+      const stop = end === -1 ? n : end + 2;
+      out += `<span class="tok-expr">${esc(text.slice(i, stop))}</span>`;
+      i = stop;
+      continue;
+    }
+    if (text[i] === "'" || text[i] === '"') {
+      const quote = text[i];
+      let j = i + 1;
+      while (j < n && text[j] !== quote) j++;
+      j = Math.min(n, j + 1);
+      out += `<span class="tok-str">${esc(text.slice(i, j))}</span>`;
+      i = j;
+      continue;
+    }
+    // consume a run of plain text up to the next special character
+    let j = i;
+    while (j < n && !(text[j] === '$' && text[j + 1] === '{') && text[j] !== "'" && text[j] !== '"') j++;
+    if (j === i) j++;
+    out += esc(text.slice(i, j));
+    i = j;
+  }
+  return out;
+}
+
+function highlightLine(line) {
+  const { code, comment } = splitComment(line);
+  const m = code.match(/^(\s*(?:-\s+)?)([A-Za-z0-9_.\-]+)(\s*:)(\s|$)/);
+  let body;
+  if (m) {
+    const [, lead, key, colon] = m;
+    const rest = code.slice(m[0].length - m[4].length); // keep the separating whitespace with the value
+    body = `${esc(lead)}<span class="tok-key">${esc(key)}</span>${esc(colon)}${highlightInline(rest)}`;
+  } else {
+    const dash = code.match(/^(\s*-\s+)(.*)$/);
+    if (dash) body = `${esc(dash[1])}${highlightInline(dash[2])}`;
+    else body = highlightInline(code);
+  }
+  const commentHtml = comment ? `<span class="tok-comment">${esc(comment)}</span>` : '';
+  return body + commentHtml;
+}
+
+function highlightYaml(text) {
+  return text.split('\n').map(highlightLine).join('\n');
+}
+
+if (typeof module !== 'undefined') module.exports = { highlightYaml, splitComment, highlightInline };
+
+
+// Full curriculum data: modules -> lessons. Pure data + small check functions; no DOM, no imports
+// beyond the Y() line-join helper, so this file can be tested head-less with Node and then pasted
+// verbatim into the published page's inline <script>.
+
+function Y(...lines) { return lines.join('\n'); }
+
+const MODULES = [
+{
+  id: 'm0', title: 'Orientation', blurb: 'What a pipeline even is, before you touch any YAML.',
+  lessons: [
+    {
+      id: 'm0-l1', title: 'Meet the Pipeline',
+      objective: 'Give the job a runner to execute on, then watch it go.',
+      intro: Y(
+        '<p>Every GitHub Actions pipeline starts from one file: a <code>.yml</code> file inside <code>.github/workflows/</code>. GitHub watches your repository for events &mdash; a push, a pull request, a schedule &mdash; and when one matches a workflow\'s <code>on:</code> block, it spins up a fresh virtual machine, checks out your code, and runs the <code>steps:</code> you wrote, in order, top to bottom.</p>',
+        '<p>That\'s the whole trick. No daemons, no servers to babysit &mdash; just a YAML file describing what should happen and when. This lab will have you write dozens of these files, starting from nothing and ending at the kind of pipeline a senior engineer ships to production.</p>',
+        '<p class="tip"><strong>This lesson:</strong> the workflow below is almost ready. It just doesn\'t say <em>where</em> to run &mdash; every job needs a <code>runs-on:</code> target, naming the virtual machine image GitHub should boot.</p>'
+      ),
+      starter: Y(
+        'name: Hello Pipeline',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    steps:',
+        '      - name: Say hello',
+        '        run: echo "Hello, pipeline!"'
+      ),
+      solution: Y(
+        'name: Hello Pipeline',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - name: Say hello',
+        '        run: echo "Hello, pipeline!"'
+      ),
+      hints: [
+        'Every job needs a <code>runs-on:</code> line directly under its name, at the same indent level as <code>steps:</code>.',
+        'The standard choice is <code>runs-on: ubuntu-latest</code> &mdash; a fresh Ubuntu VM GitHub provides for free on public repos.'
+      ],
+      checks: [
+        { label: 'The <code>build</code> job has a <code>runs-on</code> target', test: api => !!api.job('build')['runs-on'] },
+      ],
+    },
+  ],
+},
+{
+  id: 'm1', title: 'Anatomy of a Workflow', blurb: 'YAML syntax and the skeleton every workflow shares.',
+  lessons: [
+    {
+      id: 'm1-l1', title: 'YAML Syntax Bootcamp',
+      objective: 'Fix the broken file so it parses, then confirm the pipeline underneath still does its job.',
+      intro: Y(
+        '<p>YAML is whitespace-sensitive and unforgiving about exactly one thing: it never allows tab characters for indentation, only spaces. A single stray tab, invisible in most editors, will fail the entire workflow before a single job runs.</p>',
+        '<p>The file below has that exact bug. Your editor shows it as a reddish gap because the tab doesn\'t line up like the spaces around it &mdash; that\'s your tell.</p>',
+        '<p class="tip"><strong>Senior habit:</strong> configure your editor to show whitespace characters and convert tabs to spaces automatically. It\'s the single most common reason a brand-new workflow fails with a cryptic parser error on the very first commit.</p>'
+      ),
+      starter: Y(
+        'name: Build And Test',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '\t  runs-on: ubuntu-latest',
+        '    steps:',
+        '      - name: Checkout',
+        '        uses: actions/checkout@v4',
+        '      - name: Run tests',
+        '        run: npm test'
+      ),
+      solution: Y(
+        'name: Build And Test',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - name: Checkout',
+        '        uses: actions/checkout@v4',
+        '      - name: Run tests',
+        '        run: npm test'
+      ),
+      hints: [
+        'The parser error names a line number and a column &mdash; jump straight to it.',
+        'Delete the whole indent on the <code>runs-on:</code> line and retype it using only spaces, matching the two-space pattern used elsewhere in the file.'
+      ],
+      checks: [
+        { label: 'The file parses as valid YAML', test: api => api.parses },
+        { label: '<code>build</code> runs on <code>ubuntu-latest</code>', test: api => api.parses && api.job('build')['runs-on'] === 'ubuntu-latest' },
+        { label: 'Still checks out the code and runs tests', test: api => api.parses && api.anyStepUses(/actions\/checkout@v4/) && api.anyStepRuns(/npm test/) },
+      ],
+    },
+    {
+      id: 'm1-l2', title: 'Anatomy of workflow.yml',
+      objective: 'Build the four pillars every workflow needs, from a near-empty file.',
+      intro: Y(
+        '<p>Strip any GitHub Actions file to its skeleton and you always find the same four pieces: <code>name</code> (what shows up in the Actions tab), <code>on</code> (the trigger), <code>jobs</code> (one or more units of work, each with its own VM), and inside each job, <code>steps</code> (the ordered list of things that VM actually does).</p>',
+        '<div class="ref-box"><div class="ref-title">The skeleton</div><pre class="ref-code">name: &lt;string&gt;\non: &lt;event&gt;\njobs:\n  &lt;job-id&gt;:\n    runs-on: &lt;runner image&gt;\n    steps:\n      - run: &lt;shell command&gt;</pre></div>',
+        '<p>Fill in every blank below to complete your first workflow from scratch.</p>'
+      ),
+      starter: Y(
+        '# Fill in every blank: a name, a trigger, a runner, and a step that prints a greeting.',
+        'name:',
+        'on:',
+        'jobs:',
+        '  greet:',
+        '    runs-on:',
+        '    steps:',
+        '      - name: Greeting',
+        '        run:'
+      ),
+      solution: Y(
+        'name: Greeting Workflow',
+        'on: push',
+        'jobs:',
+        '  greet:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - name: Greeting',
+        '        run: echo "Welcome to CI/CD"'
+      ),
+      hints: [
+        '<code>on:</code> can be as short as a single word, e.g. <code>on: push</code> &mdash; no nested block required.',
+        'A run step just needs a shell command after <code>run:</code>, like <code>run: echo "hi"</code>.'
+      ],
+      checks: [
+        { label: 'Workflow has a <code>name</code>', test: api => api.parses && typeof api.parsed.name === 'string' && api.parsed.name.trim().length > 0 },
+        { label: 'Workflow has a trigger under <code>on</code>', test: api => api.parses && !!api.parsed.on },
+        { label: '<code>greet</code> has a <code>runs-on</code> target', test: api => api.parses && !!api.job('greet')['runs-on'] },
+        { label: '<code>greet</code> has a step that runs a command', test: api => api.parses && api.stepInJob('greet', s => typeof s.run === 'string' && s.run.trim().length > 0) },
+      ],
+    },
+  ],
+},
+{
+  id: 'm2', title: 'Triggers', blurb: 'Deciding exactly when a pipeline should run.',
+  lessons: [
+    {
+      id: 'm2-l1', title: 'Push & Pull Request Triggers',
+      objective: 'Run CI on every push to main, and on every pull request targeting main.',
+      intro: Y(
+        '<p>This workflow is currently watching the wrong branch, and it never reacts to pull requests at all &mdash; so nobody sees results until after they\'ve already merged. Point <code>push</code> at <code>main</code>, and add a <code>pull_request</code> trigger scoped to the same branch.</p>',
+        '<p class="tip">Try the scenario switcher on the right before and after you fix it &mdash; it tells you, for a given simulated event, whether this exact file would even start a run.</p>'
+      ),
+      starter: Y(
+        'name: CI',
+        'on:',
+        '  push:',
+        '    branches: [develop]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - run: npm ci && npm test'
+      ),
+      solution: Y(
+        'name: CI',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        '  pull_request:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - run: npm ci && npm test'
+      ),
+      hints: [
+        'Change <code>develop</code> to <code>main</code> under <code>push.branches</code>.',
+        'Add a sibling key to <code>push</code>, indented the same way: <code>pull_request:</code> with its own <code>branches: [main]</code>.'
+      ],
+      checks: [
+        { label: 'Triggers on push to <code>main</code>', test: api => api.parses && api.toArray(api.parsed.on?.push?.branches).includes('main') },
+        { label: 'Triggers on pull requests into <code>main</code>', test: api => api.parses && !!api.parsed.on?.pull_request && api.toArray(api.parsed.on.pull_request.branches).includes('main') },
+      ],
+      scenarios: [
+        { id: 'push-main', label: 'Push to main', event: { name: 'push', refName: 'main' } },
+        { id: 'push-feature', label: 'Push to a feature branch', event: { name: 'push', refName: 'feature/login' } },
+        { id: 'pr-main', label: 'Pull request into main', event: { name: 'pull_request', refName: 'main', prAction: 'opened' } },
+      ],
+    },
+    {
+      id: 'm2-l2', title: 'Scheduled & Manual Runs',
+      objective: 'Add a nightly cron schedule, and let a human preview the job with a manual input.',
+      intro: Y(
+        '<p>Not every pipeline reacts to code changes. <code>schedule:</code> fires on a cron expression (five fields: minute, hour, day-of-month, month, day-of-week, always in UTC); <code>workflow_dispatch:</code> adds a &ldquo;Run workflow&rdquo; button in the Actions tab, and can accept typed <code>inputs</code> so a human can pass options in at launch time.</p>',
+        '<p class="tip"><strong>Senior habit:</strong> destructive or expensive scheduled jobs almost always ship with a <code>dry_run</code> boolean input, defaulting to <code>true</code>, so a human can preview the blast radius before the real thing runs unattended at 3am.</p>'
+      ),
+      starter: Y(
+        'name: Nightly Maintenance',
+        'on:',
+        '  workflow_dispatch:',
+        'jobs:',
+        '  cleanup:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: echo "Cleaning up stale branches"'
+      ),
+      solution: Y(
+        'name: Nightly Maintenance',
+        'on:',
+        '  schedule:',
+        '    - cron: \'0 3 * * *\'',
+        '  workflow_dispatch:',
+        '    inputs:',
+        '      dry_run:',
+        '        description: \'Preview without deleting anything\'',
+        '        type: boolean',
+        '        default: true',
+        'jobs:',
+        '  cleanup:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: echo "Cleaning up stale branches"'
+      ),
+      hints: [
+        'Add a <code>schedule:</code> list under <code>on</code>, one item with a <code>cron:</code> string &mdash; <code>\'0 3 * * *\'</code> means 03:00 UTC every day.',
+        'Under <code>workflow_dispatch:</code>, add <code>inputs:</code>, then a <code>dry_run</code> input with <code>type: boolean</code> and <code>default: true</code>.'
+      ],
+      checks: [
+        { label: 'Has a nightly cron schedule', test: api => api.parses && Array.isArray(api.parsed.on?.schedule) && /^\S+\s+\S+\s+\S+\s+\S+\s+\S+$/.test(String(api.parsed.on.schedule[0]?.cron || '')) },
+        { label: 'Manual run accepts a <code>dry_run</code> input', test: api => api.parses && !!api.parsed.on?.workflow_dispatch?.inputs?.dry_run },
+      ],
+      scenarios: [
+        { id: 'sched', label: 'Nightly schedule fires', event: { name: 'schedule' } },
+        { id: 'manual', label: 'Someone clicks "Run workflow"', event: { name: 'workflow_dispatch' } },
+        { id: 'push', label: 'Someone pushes code', event: { name: 'push', refName: 'main' } },
+      ],
+    },
+    {
+      id: 'm2-l3', title: 'Picking the Right Activity Types',
+      objective: 'Re-run checks when a draft PR becomes ready, and skip CI for documentation-only changes.',
+      intro: Y(
+        '<p><code>pull_request</code> actually fires for many different <em>activity types</em> &mdash; opened, synchronize (new commits pushed), reopened, and others. Left unset, GitHub defaults to just <code>[opened, synchronize, reopened]</code>, which silently misses the moment a draft PR is marked ready for review.</p>',
+        '<p>Meanwhile, <code>paths-ignore</code> (or its opposite, <code>paths</code>) lets you skip an entire pipeline run when the only files that changed can\'t affect it &mdash; documentation is the classic example.</p>'
+      ),
+      starter: Y(
+        'name: PR Checks',
+        'on:',
+        '  pull_request:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - run: npm ci && npm test'
+      ),
+      solution: Y(
+        'name: PR Checks',
+        'on:',
+        '  pull_request:',
+        '    branches: [main]',
+        '    types: [opened, synchronize, reopened, ready_for_review]',
+        '    paths-ignore:',
+        '      - \'**.md\'',
+        '      - \'docs/**\'',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - run: npm ci && npm test'
+      ),
+      hints: [
+        'Add <code>types: [opened, synchronize, reopened, ready_for_review]</code> under <code>pull_request</code>, alongside <code>branches</code>.',
+        'Add a <code>paths-ignore</code> list with glob patterns like <code>\'**.md\'</code> and <code>\'docs/**\'</code>.'
+      ],
+      checks: [
+        { label: 'Re-checks a draft PR marked ready for review', test: api => api.parses && api.toArray(api.parsed.on?.pull_request?.types).includes('ready_for_review') },
+        { label: 'Skips documentation-only changes', test: api => {
+          if (!api.parses) return false;
+          const patterns = api.toArray(api.parsed.on?.pull_request?.['paths-ignore']).map(String);
+          return patterns.some(p => /\.md/i.test(p)) && patterns.some(p => /docs/i.test(p));
+        } },
+      ],
+      scenarios: [
+        { id: 'opened', label: 'PR opened', event: { name: 'pull_request', refName: 'main', prAction: 'opened' } },
+        { id: 'ready', label: 'Draft marked ready for review', event: { name: 'pull_request', refName: 'main', prAction: 'ready_for_review' } },
+        { id: 'docs', label: 'PR only touches README.md', event: { name: 'pull_request', refName: 'main', prAction: 'opened', paths: ['README.md'] } },
+      ],
+    },
+  ],
+},
+{
+  id: 'm3', title: 'Jobs, Steps & Runners', blurb: 'Structuring work across one or many virtual machines.',
+  lessons: [
+    {
+      id: 'm3-l1', title: 'Parallel Jobs & runs-on',
+      objective: 'Split one slow sequential job into two independent jobs that run at the same time.',
+      intro: Y(
+        '<p>Every <code>job</code> gets its own fresh virtual machine, and by default, jobs with no relationship to each other run <strong>in parallel</strong>, not in sequence. Right now, lint and test are crammed into one job, so test waits for lint to finish for no reason &mdash; wasted wall-clock time on every single run.</p>'
+      ),
+      starter: Y(
+        'name: Checks',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  checks:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - name: Lint',
+        '        run: npm run lint',
+        '      - name: Test',
+        '        run: npm test'
+      ),
+      solution: Y(
+        'name: Checks',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  lint:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - run: npm run lint',
+        '  test:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - run: npm test'
+      ),
+      hints: [
+        'Replace the single <code>checks:</code> job with two sibling jobs, <code>lint:</code> and <code>test:</code>, each indented directly under <code>jobs:</code>.',
+        'Each new job needs its own <code>runs-on</code> and its own <code>actions/checkout@v4</code> &mdash; VMs don\'t share a filesystem.'
+      ],
+      checks: [
+        { label: 'Separate <code>lint</code> and <code>test</code> jobs exist', test: api => api.parses && api.hasJob('lint') && api.hasJob('test') },
+        { label: 'Both jobs have a runner and stay independent', test: api => api.parses && !!api.job('lint')['runs-on'] && !!api.job('test')['runs-on'] && api.needsOf('lint').length === 0 && api.needsOf('test').length === 0 },
+        { label: 'Lint still lints, test still tests', test: api => api.parses && api.stepInJob('lint', s => api.runMatches(s, /lint/)) && api.stepInJob('test', s => api.runMatches(s, /test/)) },
+      ],
+    },
+    {
+      id: 'm3-l2', title: 'Sequencing with needs:',
+      objective: 'Make deploy wait for both lint and test to succeed first.',
+      intro: Y(
+        '<p>Parallel jobs are fast, but not every job should start immediately &mdash; <code>needs:</code> declares a dependency, telling GitHub Actions to hold a job back until the jobs it needs have finished successfully. Right now <code>deploy</code> races ahead with no regard for whether the code even passes its tests.</p>',
+        '<div class="ref-box"><div class="ref-title">Syntax</div><pre class="ref-code">deploy:\n  needs: [lint, test]</pre></div>'
+      ),
+      starter: Y(
+        'name: Checks And Deploy',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  lint:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: npm run lint',
+        '  test:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: npm test',
+        '  deploy:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./deploy.sh'
+      ),
+      solution: Y(
+        'name: Checks And Deploy',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  lint:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: npm run lint',
+        '  test:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: npm test',
+        '  deploy:',
+        '    needs: [lint, test]',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./deploy.sh'
+      ),
+      hints: ['Add <code>needs: [lint, test]</code> to the <code>deploy</code> job, indented the same as its <code>runs-on</code>.'],
+      checks: [
+        { label: '<code>deploy</code> needs both <code>lint</code> and <code>test</code>', test: api => api.parses && api.needsOf('deploy').slice().sort().join(',') === 'lint,test' },
+      ],
+    },
+    {
+      id: 'm3-l3', title: 'Passing Data with Job Outputs',
+      objective: 'Expose a computed version string from build, and consume it in deploy.',
+      intro: Y(
+        '<p>Jobs run on separate machines, so they can\'t share variables directly &mdash; but they can share small strings deliberately, through <strong>outputs</strong>. A step first writes a value to <code>$GITHUB_OUTPUT</code>; the job then re-exposes that step\'s output as one of its own <code>outputs</code>; any job that <code>needs</code> it can then read <code>needs.&lt;job&gt;.outputs.&lt;name&gt;</code>.</p>',
+        '<div class="ref-box"><div class="ref-title">The chain</div><pre class="ref-code">steps.&lt;step-id&gt;.outputs.&lt;name&gt;  &rarr;  job.outputs.&lt;name&gt;  &rarr;  needs.&lt;job&gt;.outputs.&lt;name&gt;</pre></div>'
+      ),
+      starter: Y(
+        'name: Versioned Deploy',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - name: Compute version',
+        '        id: ver',
+        '        run: echo "value=1.4.0-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"',
+        '  deploy:',
+        '    needs: build',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - name: Deploy',
+        '        run: ./deploy.sh'
+      ),
+      solution: Y(
+        'name: Versioned Deploy',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    outputs:',
+        '      version: ${{ steps.ver.outputs.value }}',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - name: Compute version',
+        '        id: ver',
+        '        run: echo "value=1.4.0-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"',
+        '  deploy:',
+        '    needs: build',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - name: Deploy',
+        '        run: ./deploy.sh ${{ needs.build.outputs.version }}'
+      ),
+      hints: [
+        'Add an <code>outputs:</code> block to <code>build</code>, same indent as <code>steps:</code>, mapping <code>version</code> to <code>${{ steps.ver.outputs.value }}</code>.',
+        'In <code>deploy</code>, pass the version into the deploy script: <code>run: ./deploy.sh ${{ needs.build.outputs.version }}</code>.'
+      ],
+      checks: [
+        { label: '<code>build</code> exposes its computed version', test: api => api.parses && typeof api.job('build').outputs?.version === 'string' && /steps\.ver\.outputs\.value/.test(api.job('build').outputs.version) },
+        { label: '<code>deploy</code> reads it back', test: api => api.parses && api.stepInJob('deploy', s => api.runMatches(s, /needs\.build\.outputs\.version/)) },
+      ],
+    },
+  ],
+},
+{
+  id: 'm4', title: 'Using Actions', blurb: 'The marketplace, with: inputs, and version pinning.',
+  lessons: [
+    {
+      id: 'm4-l1', title: 'Using Marketplace Actions',
+      objective: 'Check out the repository and set up the right Node.js version before building.',
+      intro: Y(
+        '<p><code>uses:</code> pulls in a prebuilt, shareable step from the GitHub Marketplace instead of hand-writing shell commands. Two you\'ll use in nearly every workflow: <code>actions/checkout</code>, which clones your repository onto the runner (without it, there\'s no code to build!), and <code>actions/setup-node</code>, which installs a specific Node.js version via its <code>with:</code> inputs.</p>',
+        '<p class="tip">This job currently skips checkout entirely &mdash; a surprisingly common first mistake, since the error it produces (&ldquo;no such file or directory&rdquo;) doesn\'t obviously point back to a missing checkout step.</p>'
+      ),
+      starter: Y(
+        'name: Build',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - name: Build the project',
+        '        run: node ./build.js'
+      ),
+      solution: Y(
+        'name: Build',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - name: Checkout',
+        '        uses: actions/checkout@v4',
+        '      - name: Set up Node.js',
+        '        uses: actions/setup-node@v4',
+        '        with:',
+        '          node-version: \'20\'',
+        '      - name: Build the project',
+        '        run: node ./build.js'
+      ),
+      hints: [
+        'Add <code>- uses: actions/checkout@v4</code> as the very first step.',
+        'Add <code>actions/setup-node@v4</code> next, with a <code>with: { node-version: \'20\' }</code> block, before the build step.'
+      ],
+      checks: [
+        { label: 'First step checks out the repository', test: api => { const steps = api.stepsOf('build'); return api.parses && steps[0] && api.usesMatches(steps[0], /actions\/checkout@v4/); } },
+        { label: 'Sets up Node.js 20 before building', test: api => api.parses && api.stepInJob('build', s => api.usesMatches(s, /actions\/setup-node@v4/) && /20/.test(String(s.with?.['node-version'] || ''))) },
+      ],
+    },
+    {
+      id: 'm4-l2', title: 'Pinning Action Versions',
+      objective: 'Stop tracking a floating branch for every action &mdash; pin to released versions.',
+      intro: Y(
+        '<p>An action reference after the <code>@</code> can point to a tag (<code>@v4</code>), a branch (<code>@main</code>), or a commit SHA. A branch reference is a moving target: the maintainer can push new, different code to it at any time, and your pipeline will silently start running something you never reviewed.</p>',
+        '<p class="tip">Tags can technically move too, but in practice reputable actions treat a version tag as immutable once published. The gold standard &mdash; pinning to an exact commit SHA &mdash; is coming up in the security module.</p>'
+      ),
+      starter: Y(
+        'name: Build',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@main',
+        '      - uses: some-ci-org/deploy-action@master',
+        '      - run: npm ci && npm test'
+      ),
+      solution: Y(
+        'name: Build',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - uses: some-ci-org/deploy-action@v3',
+        '      - run: npm ci && npm test'
+      ),
+      hints: ['Replace <code>@main</code> and <code>@master</code> with released version tags, like <code>@v4</code> and <code>@v3</code>.'],
+      checks: [
+        { label: 'No action still tracks a floating branch', test: api => api.parses && !api.anyStepUses(/@(main|master)$/) },
+        { label: 'checkout is pinned to a version tag', test: api => api.parses && api.anyStepUses(/actions\/checkout@v\d/) },
+        { label: 'deploy-action is pinned to a version tag', test: api => api.parses && api.anyStepUses(/deploy-action@v\d/) },
+      ],
+    },
+  ],
+},
+{
+  id: 'm5', title: 'Variables, Env & Secrets', blurb: 'Expressions, environment variables, and never leaking a token.',
+  lessons: [
+    {
+      id: 'm5-l1', title: 'Environment Variables & Expressions',
+      objective: 'Define the API URL once, and reference it everywhere with an expression.',
+      intro: Y(
+        '<p><code>${{ }}</code> is the expression syntax that runs through every part of a workflow file. The simplest use: define a variable once under <code>env:</code>, then read it anywhere with <code>${{ env.NAME }}</code> &mdash; at the workflow, job, or even single-step level.</p>',
+        '<p>Right now the same URL is typed out twice. If it ever changes, that\'s two places to remember &mdash; or, more realistically, one place someone forgets.</p>'
+      ),
+      starter: Y(
+        'name: Smoke Test',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  ping:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - name: Check health',
+        '        run: curl -f https://api.orbit.dev/health',
+        '      - name: Check version endpoint',
+        '        run: curl -f https://api.orbit.dev/version'
+      ),
+      solution: Y(
+        'name: Smoke Test',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'env:',
+        '  API_URL: https://api.orbit.dev',
+        'jobs:',
+        '  ping:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - name: Check health',
+        '        run: curl -f ${{ env.API_URL }}/health',
+        '      - name: Check version endpoint',
+        '        run: curl -f ${{ env.API_URL }}/version'
+      ),
+      hints: [
+        'Add a top-level <code>env:</code> block with <code>API_URL: https://api.orbit.dev</code>.',
+        'Replace both hardcoded URLs with <code>${{ env.API_URL }}</code>.'
+      ],
+      checks: [
+        { label: '<code>API_URL</code> is defined once, in <code>env</code>', test: api => api.parses && typeof api.parsed.env?.API_URL === 'string' },
+        { label: 'Both steps reference <code>${{ env.API_URL }}</code>', test: api => api.parses && api.anyStepRuns(/\$\{\{\s*env\.API_URL\s*\}\}/g) && api.countStepRuns(/\$\{\{\s*env\.API_URL\s*\}\}/g) >= 2 },
+      ],
+    },
+    {
+      id: 'm5-l2', title: 'Secrets & GITHUB_TOKEN',
+      objective: 'Replace a hardcoded token with a secret reference &mdash; before it leaks.',
+      intro: Y(
+        '<p>Never write a real credential directly into a workflow file. Even in a private repository, it ends up in git history forever, visible to anyone with read access, and copy-pastable into any fork. Instead, store it once as a repository secret, then reference it with <code>${{ secrets.NAME }}</code> &mdash; GitHub automatically masks the value anywhere it would appear in a log.</p>',
+        '<p class="tip">GitHub\'s own push-protection and most security scanners specifically look for patterns like <code>ghp_</code> (a personal access token) committed in plain text &mdash; which is exactly what\'s hiding in the step below.</p>'
+      ),
+      starter: Y(
+        'name: Deploy',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  deploy:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - name: Notify deploy service',
+        '        run: \'curl -H "Authorization: Bearer ghp_1234567890abcdef1234" https://deploy.orbit.dev/trigger\''
+      ),
+      solution: Y(
+        'name: Deploy',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  deploy:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - name: Notify deploy service',
+        '        run: \'curl -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" https://deploy.orbit.dev/trigger\''
+      ),
+      hints: ['Replace the literal <code>ghp_&hellip;</code> string with <code>${{ secrets.DEPLOY_TOKEN }}</code> &mdash; the secret already exists in this lab\'s simulated repository settings.'],
+      checks: [
+        { label: 'No hardcoded token left in the file', test: api => api.parses && !api.anyRawLineMatches(/ghp_[A-Za-z0-9]{10,}/) },
+        { label: 'Uses <code>secrets.DEPLOY_TOKEN</code> instead', test: api => api.parses && api.anyStepRuns(/secrets\.DEPLOY_TOKEN/) },
+      ],
+    },
+  ],
+},
+{
+  id: 'm6', title: 'Conditionals & Expressions', blurb: 'Teaching a pipeline to react to its own status.',
+  lessons: [
+    {
+      id: 'm6-l1', title: 'if: and Job Status Functions',
+      objective: 'Send a failure notification only when tests actually fail.',
+      intro: Y(
+        '<p><code>if:</code> gates whether a job (or a single step) runs at all. Combined with status functions &mdash; <code>success()</code>, <code>failure()</code>, <code>cancelled()</code>, <code>always()</code> &mdash; it lets a pipeline react to its own outcome: run a step only after something upstream broke, or always clean up no matter what happened.</p>',
+        '<div class="ref-box"><div class="ref-title">The default you never see</div><pre class="ref-code">if: success()   # implied on every job unless you write your own if:</pre></div>'
+      ),
+      starter: Y(
+        'name: CI',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  test:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: npm test',
+        '  notify:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./notify-slack.sh "something happened"'
+      ),
+      solution: Y(
+        'name: CI',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  test:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: npm test',
+        '  notify:',
+        '    needs: test',
+        '    if: failure()',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./notify-slack.sh "tests failed"'
+      ),
+      hints: [
+        'Add <code>needs: test</code> to <code>notify</code> &mdash; it has to depend on <code>test</code> before it can react to its outcome.',
+        'Add <code>if: failure()</code> directly below <code>needs:</code>.'
+      ],
+      checks: [
+        { label: '<code>notify</code> depends on <code>test</code>', test: api => api.parses && api.needsOf('notify').includes('test') },
+        { label: '<code>notify</code> only runs when tests fail', test: api => api.parses && typeof api.job('notify').if === 'string' && api.evalIf('notify', { __jobStatus: 'failure' }) === true && api.evalIf('notify', { __jobStatus: 'success' }) === false },
+      ],
+      scenarios: [
+        { id: 'pass', label: 'Tests pass', event: { name: 'push', refName: 'main' } },
+        { id: 'fail', label: 'Tests fail', event: { name: 'push', refName: 'main' }, overrides: { forceFail: 'test' } },
+      ],
+    },
+    {
+      id: 'm6-l2', title: 'Branching Logic with Expressions',
+      objective: 'Only deploy on a direct push to main &mdash; never from a pull request or another branch.',
+      intro: Y(
+        '<p>Expressions can combine context values with <code>&amp;&amp;</code>, <code>||</code>, and comparisons. A deploy job almost always needs more than one condition true at once: the right event, <em>and</em> the right branch.</p>',
+        '<div class="ref-box"><div class="ref-title">Useful context</div><pre class="ref-code">github.event_name   # "push", "pull_request", "schedule", ...\ngithub.ref_name     # "main", "feature/login", ...</pre></div>'
+      ),
+      starter: Y(
+        'name: Deploy',
+        'on:',
+        '  push:',
+        '  pull_request:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: npm run build',
+        '  deploy:',
+        '    needs: build',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./deploy.sh'
+      ),
+      solution: Y(
+        'name: Deploy',
+        'on:',
+        '  push:',
+        '  pull_request:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: npm run build',
+        '  deploy:',
+        '    needs: build',
+        '    if: github.event_name == \'push\' && github.ref_name == \'main\'',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./deploy.sh'
+      ),
+      hints: ['Add <code>if: github.event_name == \'push\' && github.ref_name == \'main\'</code> to the <code>deploy</code> job.'],
+      checks: [
+        { label: 'Deploys on a push to main', test: api => api.parses && api.evalIf('deploy', { github: { event_name: 'push', ref_name: 'main' } }) === true },
+        { label: 'Skips a push to another branch', test: api => api.parses && api.evalIf('deploy', { github: { event_name: 'push', ref_name: 'feature-x' } }) === false },
+        { label: 'Skips pull requests entirely', test: api => api.parses && api.evalIf('deploy', { github: { event_name: 'pull_request', ref_name: 'main' } }) === false },
+      ],
+      scenarios: [
+        { id: 'push-main', label: 'Push to main', event: { name: 'push', refName: 'main' } },
+        { id: 'push-other', label: 'Push to another branch', event: { name: 'push', refName: 'feature-x' } },
+        { id: 'pr', label: 'Pull request into main', event: { name: 'pull_request', refName: 'main', prAction: 'opened' } },
+      ],
+    },
+  ],
+},
+{
+  id: 'm7', title: 'Matrix Builds', blurb: 'Testing many configurations without copy-pasting jobs.',
+  lessons: [
+    {
+      id: 'm7-l1', title: 'Matrix Testing Basics',
+      objective: 'Test against Node 16, 18, and 20 instead of just one version.',
+      intro: Y(
+        '<p><code>strategy.matrix</code> turns one job definition into many parallel runs, one per combination of values. It\'s how you test &ldquo;does this work on every Node version we claim to support&rdquo; without writing the same job three times.</p>',
+        '<div class="ref-box"><div class="ref-title">Reading a value back</div><pre class="ref-code">strategy:\n  matrix:\n    node: [16, 18, 20]\nsteps:\n  - uses: actions/setup-node@v4\n    with:\n      node-version: ${{ matrix.node }}</pre></div>'
+      ),
+      starter: Y(
+        'name: Test',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  test:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - uses: actions/setup-node@v4',
+        '        with:',
+        '          node-version: \'18\'',
+        '      - run: npm ci && npm test'
+      ),
+      solution: Y(
+        'name: Test',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  test:',
+        '    runs-on: ubuntu-latest',
+        '    strategy:',
+        '      matrix:',
+        '        node: [16, 18, 20]',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - uses: actions/setup-node@v4',
+        '        with:',
+        '          node-version: ${{ matrix.node }}',
+        '      - run: npm ci && npm test'
+      ),
+      hints: [
+        'Add a <code>strategy: { matrix: { node: [16, 18, 20] } }</code> block to the <code>test</code> job.',
+        'Change <code>node-version</code> from the literal <code>\'18\'</code> to <code>${{ matrix.node }}</code>.'
+      ],
+      checks: [
+        { label: 'Matrix covers at least 3 Node versions', test: api => api.parses && Array.isArray(api.job('test').strategy?.matrix?.node) && api.job('test').strategy.matrix.node.length >= 3 },
+        { label: 'setup-node reads the version from the matrix', test: api => api.parses && api.stepInJob('test', s => api.usesMatches(s, /setup-node/) && /matrix\.node/.test(String(s.with?.['node-version'] || ''))) },
+      ],
+    },
+    {
+      id: 'm7-l2', title: 'include/exclude & fail-fast',
+      objective: 'Exclude a known-broken combination, and stop one flaky OS from hiding every other result.',
+      intro: Y(
+        '<p>A matrix can cross multiple dimensions at once &mdash; <code>os</code> and <code>node</code> together produce every combination, which can add up fast (3 &times; 3 = 9 runners here). <code>exclude</code> removes specific combinations that don\'t make sense (a native dependency that simply doesn\'t build on old Node on Windows, say).</p>',
+        '<p>Separately: by default, <code>fail-fast</code> is <code>true</code>, which means the moment <em>any</em> matrix combination fails, GitHub Actions cancels every other still-running combination in that matrix. That\'s great for saving compute on a real break &mdash; and terrible when you\'re trying to see <em>which</em> combinations actually fail, since you only ever see the first one.</p>'
+      ),
+      starter: Y(
+        'name: Cross-Platform Test',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  test:',
+        '    runs-on: ${{ matrix.os }}',
+        '    strategy:',
+        '      matrix:',
+        '        os: [ubuntu-latest, windows-latest, macos-latest]',
+        '        node: [16, 18, 20]',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - run: npm ci && npm test'
+      ),
+      solution: Y(
+        'name: Cross-Platform Test',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  test:',
+        '    runs-on: ${{ matrix.os }}',
+        '    strategy:',
+        '      fail-fast: false',
+        '      matrix:',
+        '        os: [ubuntu-latest, windows-latest, macos-latest]',
+        '        node: [16, 18, 20]',
+        '        exclude:',
+        '          - os: windows-latest',
+        '            node: 16',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - run: npm ci && npm test'
+      ),
+      hints: [
+        'Add <code>exclude:</code> under <code>matrix</code>, with one item: <code>os: windows-latest</code> and <code>node: 16</code>.',
+        'Add <code>fail-fast: false</code> directly under <code>strategy</code>, as a sibling of <code>matrix</code>.'
+      ],
+      checks: [
+        { label: 'Excludes the broken Windows + Node 16 combination', test: api => {
+          if (!api.parses) return false;
+          const ex = api.job('test').strategy?.matrix?.exclude;
+          return Array.isArray(ex) && ex.some(e => String(e.os) === 'windows-latest' && String(e.node) === '16');
+        } },
+        { label: 'A single flaky combination no longer hides the rest', test: api => api.parses && api.job('test').strategy?.['fail-fast'] === false },
+      ],
+      scenarios: [
+        { id: 'flake', label: 'Node 18 fails its tests', event: { name: 'push', refName: 'main' }, overrides: { forceFailMatrix: { jobKey: 'test', match: { node: 18 }, message: 'Assertion failed: expected 200, got 500' } } },
+      ],
+    },
+  ],
+},
+{
+  id: 'm8', title: 'Caching & Artifacts', blurb: 'Speeding up runs and passing build output between jobs.',
+  lessons: [
+    {
+      id: 'm8-l1', title: 'Caching Dependencies',
+      objective: 'Cache node_modules so every run isn\'t a cold install.',
+      intro: Y(
+        '<p><code>actions/cache</code> saves a directory between runs, keyed by a string you control &mdash; usually a hash of the lockfile, via the <code>hashFiles()</code> function. If the lockfile hasn\'t changed, the next run restores dependencies straight from cache instead of re-downloading the entire registry.</p>',
+        '<div class="ref-box"><div class="ref-title">The standard pattern</div><pre class="ref-code">- uses: actions/cache@v4\n  with:\n    path: node_modules\n    key: ${{ runner.os }}-modules-${{ hashFiles(\'**/package-lock.json\') }}</pre></div>'
+      ),
+      starter: Y(
+        'name: Build',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - run: npm ci',
+        '      - run: npm run build'
+      ),
+      solution: Y(
+        'name: Build',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - uses: actions/cache@v4',
+        '        with:',
+        '          path: node_modules',
+        '          key: ${{ runner.os }}-modules-${{ hashFiles(\'**/package-lock.json\') }}',
+        '      - run: npm ci',
+        '      - run: npm run build'
+      ),
+      hints: ['Add an <code>actions/cache@v4</code> step before <code>npm ci</code>, caching <code>node_modules</code> with a key built from <code>hashFiles(\'**/package-lock.json\')</code>.'],
+      checks: [
+        { label: 'Caches dependencies before installing', test: api => { const idx = api.stepsOf('build').findIndex(s => api.usesMatches(s, /actions\/cache@v4/)); const installIdx = api.stepsOf('build').findIndex(s => api.runMatches(s, /npm ci/)); return api.parses && idx !== -1 && installIdx !== -1 && idx < installIdx; } },
+        { label: 'Cache key is based on the lockfile hash', test: api => api.parses && api.stepInJob('build', s => api.usesMatches(s, /actions\/cache@v4/) && /hashFiles\(/.test(String(s.with?.key || ''))) },
+      ],
+    },
+    {
+      id: 'm8-l2', title: 'Artifacts Between Jobs',
+      objective: 'Hand the compiled dist/ folder from build to deploy &mdash; they run on different machines.',
+      intro: Y(
+        '<p>Caching speeds up repeated work within similar runs; <strong>artifacts</strong> move files between <em>different jobs in the same run</em>. <code>build</code> and <code>deploy</code> each get a brand-new, empty virtual machine &mdash; whatever <code>build</code> compiled doesn\'t exist for <code>deploy</code> unless it\'s explicitly uploaded and downloaded.</p>'
+      ),
+      starter: Y(
+        'name: Build And Deploy',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - run: npm run build',
+        '  deploy:',
+        '    needs: build',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./publish.sh dist/'
+      ),
+      solution: Y(
+        'name: Build And Deploy',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - run: npm run build',
+        '      - uses: actions/upload-artifact@v4',
+        '        with:',
+        '          name: dist',
+        '          path: dist/',
+        '  deploy:',
+        '    needs: build',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/download-artifact@v4',
+        '        with:',
+        '          name: dist',
+        '          path: dist/',
+        '      - run: ./publish.sh dist/'
+      ),
+      hints: [
+        'In <code>build</code>, add an <code>actions/upload-artifact@v4</code> step after the build, with <code>name: dist</code> and <code>path: dist/</code>.',
+        'In <code>deploy</code>, add an <code>actions/download-artifact@v4</code> step before publishing, matching the same <code>name</code>.'
+      ],
+      checks: [
+        { label: '<code>build</code> uploads the dist folder', test: api => api.parses && api.stepInJob('build', s => api.usesMatches(s, /actions\/upload-artifact@v4/) && /dist/.test(String(s.with?.path || ''))) },
+        { label: '<code>deploy</code> downloads it back', test: api => api.parses && api.stepInJob('deploy', s => api.usesMatches(s, /actions\/download-artifact@v4/)) },
+      ],
+    },
+  ],
+},
+{
+  id: 'm9', title: 'Reusability', blurb: 'Writing CI logic once and calling it from everywhere.',
+  lessons: [
+    {
+      id: 'm9-l1', title: 'Reusable Workflows',
+      objective: 'Turn a one-off workflow into a library other workflows can call.',
+      intro: Y(
+        '<p>A <strong>reusable workflow</strong> is just a normal workflow file whose trigger is <code>workflow_call</code> instead of <code>push</code> or <code>pull_request</code>. Other workflows can then <code>uses:</code> it by path, exactly like calling a marketplace action, passing data in through declared <code>inputs</code>.</p>',
+        '<p>This is a senior staple for avoiding fifteen near-identical copies of the same deploy logic scattered across a monorepo &mdash; write it once, as a reusable workflow, and call it from each service\'s own thin workflow.</p>'
+      ),
+      starter: Y(
+        'name: Deploy Service',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  deploy:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./deploy.sh ${{ inputs.environment }}'
+      ),
+      solution: Y(
+        'name: Deploy Service',
+        'on:',
+        '  workflow_call:',
+        '    inputs:',
+        '      environment:',
+        '        required: true',
+        '        type: string',
+        'jobs:',
+        '  deploy:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./deploy.sh ${{ inputs.environment }}'
+      ),
+      hints: ['Replace the <code>push</code> trigger with <code>workflow_call</code>, declaring one required <code>environment</code> input of <code>type: string</code>.'],
+      checks: [
+        { label: 'Triggered by <code>workflow_call</code>, not a direct push', test: api => api.parses && !!api.parsed.on?.workflow_call && !api.parsed.on.push },
+        { label: 'Declares a required <code>environment</code> input', test: api => api.parses && !!api.parsed.on?.workflow_call?.inputs?.environment?.required },
+      ],
+      tip: 'The caller side looks like: <code>uses: ./.github/workflows/deploy-service.yml</code> with <code>with: { environment: production }</code> and, if it needs them, <code>secrets: inherit</code>.',
+    },
+    {
+      id: 'm9-l2', title: 'Composite Actions',
+      objective: 'Fix a composite action so it actually declares what shell to run its steps in.',
+      intro: Y(
+        '<p>A <strong>composite action</strong> packages a handful of ordinary steps into one reusable step, defined in its own <code>action.yml</code> &mdash; useful for a short sequence (like &ldquo;checkout, install, and lint&rdquo;) you want to drop into many workflows as a single line. Its own top-level shape is different from a workflow file: <code>runs.using: composite</code>, then a <code>steps</code> list.</p>',
+        '<p class="tip"><strong>The gotcha:</strong> unlike a step inside a normal job, every <code>run</code> step inside a composite action must declare its own <code>shell:</code> &mdash; GitHub Actions won\'t infer one, and leaving it out is a hard error.</p>'
+      ),
+      starter: Y(
+        'name: Lint And Format Check',
+        'description: Runs lint and format checks as one reusable step',
+        'runs:',
+        '  steps:',
+        '    - run: npm run lint',
+        '    - run: npm run format:check'
+      ),
+      solution: Y(
+        'name: Lint And Format Check',
+        'description: Runs lint and format checks as one reusable step',
+        'runs:',
+        '  using: composite',
+        '  steps:',
+        '    - run: npm run lint',
+        '      shell: bash',
+        '    - run: npm run format:check',
+        '      shell: bash'
+      ),
+      hints: [
+        'Add <code>using: composite</code> under <code>runs:</code>, above <code>steps:</code>.',
+        'Add <code>shell: bash</code> to every <code>run</code> step &mdash; it\'s required, not optional, in a composite action.'
+      ],
+      checks: [
+        { label: 'Declared as a composite action', test: api => api.parses && api.parsed.runs?.using === 'composite' },
+        { label: 'Every run step declares its shell', test: api => api.parses && api.toArray(api.parsed.runs?.steps).every(s => !s.run || !!s.shell) },
+      ],
+    },
+  ],
+},
+{
+  id: 'm10', title: 'Environments & Deployment Gates', blurb: 'Putting a human, or a queue, between code and production.',
+  lessons: [
+    {
+      id: 'm10-l1', title: 'Environments & Manual Approval',
+      objective: 'Require a human to approve before this job can touch production.',
+      intro: Y(
+        '<p>An <code>environment:</code> links a job to a named target configured in repository settings. On its own it\'s just a label &mdash; but once that environment has a <strong>protection rule</strong> (required reviewers, say), any job targeting it pauses and waits for a human to click Approve before it continues, no matter how fast the pipeline otherwise runs.</p>'
+      ),
+      starter: Y(
+        'name: Release',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  deploy:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./deploy.sh production'
+      ),
+      solution: Y(
+        'name: Release',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  deploy:',
+        '    runs-on: ubuntu-latest',
+        '    environment: production',
+        '    steps:',
+        '      - run: ./deploy.sh production'
+      ),
+      hints: ['Add <code>environment: production</code> to the <code>deploy</code> job, at the same indent as <code>runs-on</code>.'],
+      checks: [
+        { label: '<code>deploy</code> targets the <code>production</code> environment', test: api => { const e = api.job('deploy').environment; return api.parses && (e === 'production' || e?.name === 'production'); } },
+      ],
+      scenarios: [{ id: 'default', label: 'Push to main', event: { name: 'push', refName: 'main' }, overrides: { protectedEnvironments: ['production'] } }],
+    },
+    {
+      id: 'm10-l2', title: 'Concurrency Control',
+      objective: 'Stop two overlapping deploys to the same branch from racing each other.',
+      intro: Y(
+        '<p>Push twice in quick succession and, by default, GitHub Actions happily starts two full, independent runs &mdash; which can finish out of order and leave production on an older commit than the one someone thinks they just shipped. <code>concurrency</code> groups runs by a key you choose; when <code>cancel-in-progress</code> is true, a new run in the same group cancels whatever\'s still in flight.</p>'
+      ),
+      starter: Y(
+        'name: Release',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  deploy:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./deploy.sh production'
+      ),
+      solution: Y(
+        'name: Release',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'concurrency:',
+        '  group: ${{ github.workflow }}-${{ github.ref }}',
+        '  cancel-in-progress: true',
+        'jobs:',
+        '  deploy:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./deploy.sh production'
+      ),
+      hints: ['Add a top-level <code>concurrency:</code> block with <code>group: ${{ github.workflow }}-${{ github.ref }}</code> and <code>cancel-in-progress: true</code>.'],
+      checks: [
+        { label: 'Groups runs by workflow and branch', test: api => api.parses && typeof api.parsed.concurrency?.group === 'string' && /github\.(workflow|ref)/.test(api.parsed.concurrency.group) },
+        { label: 'Cancels superseded runs', test: api => api.parses && api.parsed.concurrency?.['cancel-in-progress'] === true },
+      ],
+      scenarios: [{ id: 'race', label: 'A newer push arrives mid-deploy', event: { name: 'push', refName: 'main' }, overrides: { simulateSupersededRun: true } }],
+    },
+  ],
+},
+{
+  id: 'm11', title: 'Containers & Docker', blurb: 'Building images and spinning up service dependencies.',
+  lessons: [
+    {
+      id: 'm11-l1', title: 'Building & Pushing a Docker Image',
+      objective: 'Log in to the registry and actually publish the image you build.',
+      intro: Y(
+        '<p>Building an image on the runner is only half the job &mdash; without pushing it to a registry, the image vanishes the moment the runner is torn down. The standard pair: <code>docker/login-action</code> authenticates to a registry (here, GitHub Container Registry, <code>ghcr.io</code>, using the automatic <code>GITHUB_TOKEN</code>), then <code>docker/build-push-action</code> builds <em>and</em> pushes in one step when <code>push: true</code>.</p>'
+      ),
+      starter: Y(
+        'name: Docker Build',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - name: Build image',
+        '        run: docker build -t orbit-api .'
+      ),
+      solution: Y(
+        'name: Docker Build',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - name: Log in to GHCR',
+        '        uses: docker/login-action@v3',
+        '        with:',
+        '          registry: ghcr.io',
+        '          username: ${{ github.actor }}',
+        '          password: ${{ secrets.GITHUB_TOKEN }}',
+        '      - name: Build and push image',
+        '        uses: docker/build-push-action@v6',
+        '        with:',
+        '          push: true',
+        '          tags: ghcr.io/${{ github.repository }}:latest'
+      ),
+      hints: [
+        'Add a <code>docker/login-action@v3</code> step with <code>registry: ghcr.io</code>, <code>username: ${{ github.actor }}</code>, and <code>password: ${{ secrets.GITHUB_TOKEN }}</code>.',
+        'Replace the raw <code>docker build</code> command with <code>docker/build-push-action@v6</code>, setting <code>push: true</code> and a <code>tags:</code> pointing at <code>ghcr.io</code>.'
+      ],
+      checks: [
+        { label: 'Logs in to GHCR', test: api => api.parses && api.stepInJob('build', s => api.usesMatches(s, /docker\/login-action@v\d/) && /ghcr\.io/.test(String(s.with?.registry || ''))) },
+        { label: 'Actually pushes the built image', test: api => api.parses && api.stepInJob('build', s => api.usesMatches(s, /docker\/build-push-action@v\d/) && s.with?.push === true) },
+      ],
+    },
+    {
+      id: 'm11-l2', title: 'Service Containers for Testing',
+      objective: 'Give the integration test suite a real database to talk to.',
+      intro: Y(
+        '<p>Integration tests that need a real database don\'t have one by default on a bare runner. <code>services:</code> spins up an extra container alongside your job &mdash; reachable over <code>localhost</code> at the port you map &mdash; for exactly the lifetime of that job, then tears it down automatically.</p>'
+      ),
+      starter: Y(
+        'name: Integration Tests',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  test:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - run: npm run test:integration'
+      ),
+      solution: Y(
+        'name: Integration Tests',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  test:',
+        '    runs-on: ubuntu-latest',
+        '    services:',
+        '      postgres:',
+        '        image: postgres:16',
+        '        env:',
+        '          POSTGRES_PASSWORD: test',
+        '        ports:',
+        '          - 5432:5432',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - run: npm run test:integration'
+      ),
+      hints: ['Add a <code>services:</code> block to the <code>test</code> job with a <code>postgres</code> service, <code>image: postgres:16</code>, and <code>ports: [5432:5432]</code>.'],
+      checks: [
+        { label: 'Runs a Postgres service container', test: api => api.parses && /postgres/i.test(String(api.job('test').services?.postgres?.image || '')) },
+        { label: 'Exposes it on the standard port', test: api => api.parses && api.toArray(api.job('test').services?.postgres?.ports).some(p => String(p).includes('5432')) },
+      ],
+    },
+  ],
+},
+{
+  id: 'm12', title: 'Cloud Deployment', blurb: 'Reaching AWS and Azure without ever storing a long-lived key.',
+  lessons: [
+    {
+      id: 'm12-l1', title: 'Deploying to AWS with OIDC',
+      objective: 'Replace a hardcoded AWS access key with a short-lived OIDC-assumed role.',
+      intro: Y(
+        '<p>Long-lived AWS access keys stored as secrets are a standing liability &mdash; if they ever leak, they work until someone notices and manually revokes them. OpenID Connect (OIDC) lets GitHub Actions request a short-lived token straight from AWS, scoped to one job, valid for minutes, with no stored key at all.</p>',
+        '<div class="ref-box"><div class="ref-title">What it takes</div><pre class="ref-code">permissions:\n  id-token: write   # lets THIS job request an OIDC token\n\n- uses: aws-actions/configure-aws-credentials@v4\n  with:\n    role-to-assume: ${{ secrets.AWS_ROLE_ARN }}\n    aws-region: us-east-1</pre></div>'
+      ),
+      starter: Y(
+        'name: Deploy to AWS',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  deploy:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: aws-actions/configure-aws-credentials@v4',
+        '        with:',
+        '          aws-access-key-id: AKIAABCDEFGHIJKLMNOP',
+        '          aws-secret-access-key: ${{ secrets.AWS_SECRET }}',
+        '          aws-region: us-east-1',
+        '      - run: aws s3 sync ./dist s3://orbit-web-prod'
+      ),
+      solution: Y(
+        'name: Deploy to AWS',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  deploy:',
+        '    runs-on: ubuntu-latest',
+        '    permissions:',
+        '      id-token: write',
+        '      contents: read',
+        '    steps:',
+        '      - uses: aws-actions/configure-aws-credentials@v4',
+        '        with:',
+        '          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}',
+        '          aws-region: us-east-1',
+        '      - run: aws s3 sync ./dist s3://orbit-web-prod'
+      ),
+      hints: [
+        'Add <code>permissions: { id-token: write, contents: read }</code> to the <code>deploy</code> job.',
+        'Replace the hardcoded <code>aws-access-key-id</code> and <code>aws-secret-access-key</code> with a single <code>role-to-assume: ${{ secrets.AWS_ROLE_ARN }}</code>.'
+      ],
+      checks: [
+        { label: 'No hardcoded AWS access key remains', test: api => api.parses && !api.anyRawLineMatches(/AKIA[0-9A-Z]{10,}/) },
+        { label: 'Requests an OIDC token for this job', test: api => api.parses && (api.job('deploy').permissions?.['id-token'] === 'write' || api.parsed.permissions?.['id-token'] === 'write') },
+        { label: 'Assumes a role instead of using static keys', test: api => api.parses && api.stepInJob('deploy', s => api.usesMatches(s, /configure-aws-credentials@v\d/) && /secrets\./.test(String(s.with?.['role-to-assume'] || ''))) },
+      ],
+    },
+    {
+      id: 'm12-l2', title: 'Deploying to Azure with OIDC',
+      objective: 'Swap a hardcoded Azure client secret for federated, keyless login.',
+      intro: Y(
+        '<p>Azure\'s equivalent pattern uses <code>azure/login</code> with three identifiers &mdash; <code>client-id</code>, <code>tenant-id</code>, <code>subscription-id</code> &mdash; and, with federated credentials configured on the Azure side, no password or client secret ever has to exist as a GitHub secret at all.</p>'
+      ),
+      starter: Y(
+        'name: Deploy to Azure',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  deploy:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: azure/login@v2',
+        '        with:',
+        '          creds: \'{"clientSecret":"super-secret-password123"}\'',
+        '      - run: az webapp deploy --name orbit-web'
+      ),
+      solution: Y(
+        'name: Deploy to Azure',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  deploy:',
+        '    runs-on: ubuntu-latest',
+        '    permissions:',
+        '      id-token: write',
+        '      contents: read',
+        '    steps:',
+        '      - uses: azure/login@v2',
+        '        with:',
+        '          client-id: ${{ secrets.AZURE_CLIENT_ID }}',
+        '          tenant-id: ${{ secrets.AZURE_TENANT_ID }}',
+        '          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}',
+        '      - run: az webapp deploy --name orbit-web'
+      ),
+      hints: [
+        'Add <code>permissions: { id-token: write, contents: read }</code> to the job.',
+        'Replace the <code>creds:</code> input with <code>client-id</code>, <code>tenant-id</code>, and <code>subscription-id</code>, each reading from a secret.'
+      ],
+      checks: [
+        { label: 'No hardcoded client secret remains', test: api => api.parses && !api.anyRawLineMatches(/clientSecret/i) },
+        { label: 'Requests an OIDC token for this job', test: api => api.parses && (api.job('deploy').permissions?.['id-token'] === 'write' || api.parsed.permissions?.['id-token'] === 'write') },
+        { label: 'Logs in with federated identifiers, not a password', test: api => api.parses && api.stepInJob('deploy', s => api.usesMatches(s, /azure\/login@v\d/) && /\$\{\{/.test(String(s.with?.['client-id'] || '')) && /\$\{\{/.test(String(s.with?.['tenant-id'] || ''))) },
+      ],
+    },
+  ],
+},
+{
+  id: 'm13', title: 'Monorepos & Scale', blurb: 'Keeping CI fast and organized as the repository grows.',
+  lessons: [
+    {
+      id: 'm13-l1', title: 'Path Filters for Monorepos',
+      objective: 'Only run this pipeline when the API service, or shared code it depends on, actually changes.',
+      intro: Y(
+        '<p>In a monorepo holding several services, a workflow that triggers on every push &mdash; regardless of which service changed &mdash; wastes runners on work that can\'t possibly be affected, and buries real signal under noise. <code>paths:</code> scopes the trigger to just the directories that matter.</p>'
+      ),
+      starter: Y(
+        'name: API CI',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  test:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - run: npm --prefix services/api test'
+      ),
+      solution: Y(
+        'name: API CI',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        '    paths:',
+        '      - \'services/api/**\'',
+        '      - \'packages/shared/**\'',
+        'jobs:',
+        '  test:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - run: npm --prefix services/api test'
+      ),
+      hints: ['Add a <code>paths:</code> list under <code>push</code>, including both <code>\'services/api/**\'</code> and <code>\'packages/shared/**\'</code>.'],
+      checks: [
+        { label: 'Scoped to the API service', test: api => api.parses && api.toArray(api.parsed.on?.push?.paths).some(p => /services\/api/.test(String(p))) },
+        { label: 'Still reacts to shared-package changes', test: api => api.parses && api.toArray(api.parsed.on?.push?.paths).some(p => /packages\/shared/.test(String(p))) },
+      ],
+      scenarios: [
+        { id: 'api', label: 'API files changed', event: { name: 'push', refName: 'main', paths: ['services/api/handler.js'] } },
+        { id: 'shared', label: 'Shared package changed', event: { name: 'push', refName: 'main', paths: ['packages/shared/utils.js'] } },
+        { id: 'web', label: 'Only the web app changed', event: { name: 'push', refName: 'main', paths: ['services/web/index.tsx'] } },
+      ],
+    },
+    {
+      id: 'm13-l2', title: 'Organizing Workflows at Scale',
+      objective: 'Replace three copy-pasted jobs with one matrix that calls a shared, per-service workflow.',
+      intro: Y(
+        '<p>Copy-pasting a job per service works for two services. It stops working at ten. The senior pattern: drive a <code>matrix</code> over the list of services, and have each matrix entry call one shared reusable workflow, passing just which service it\'s building.</p>'
+      ),
+      starter: Y(
+        'name: All Services CI',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  api:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./ci.sh api',
+        '  web:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./ci.sh web',
+        '  worker:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./ci.sh worker'
+      ),
+      solution: Y(
+        'name: All Services CI',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        'jobs:',
+        '  ci:',
+        '    strategy:',
+        '      matrix:',
+        '        service: [api, web, worker]',
+        '    uses: ./.github/workflows/service-ci.yml',
+        '    with:',
+        '      service: ${{ matrix.service }}'
+      ),
+      hints: [
+        'Collapse the three jobs into one, <code>ci:</code>, with <code>strategy.matrix.service: [api, web, worker]</code>.',
+        'Point it at the shared file with <code>uses: ./.github/workflows/service-ci.yml</code> and pass <code>with: { service: ${{ matrix.service }} }</code>.'
+      ],
+      checks: [
+        { label: 'One matrix drives every service', test: api => api.parses && Array.isArray(api.job('ci').strategy?.matrix?.service) && api.job('ci').strategy.matrix.service.length >= 3 },
+        { label: 'Calls a single shared workflow per service', test: api => api.parses && typeof api.job('ci').uses === 'string' && /\.github\/workflows\/.+\.ya?ml$/.test(api.job('ci').uses) && /matrix\.service/.test(JSON.stringify(api.job('ci').with || {})) },
+      ],
+    },
+  ],
+},
+{
+  id: 'm14', title: 'Security Hardening', blurb: 'The habits that separate a working pipeline from a safe one.',
+  lessons: [
+    {
+      id: 'm14-l1', title: 'Least-Privilege Permissions',
+      objective: 'Lock the default token down to read-only, then grant just the one job that needs more.',
+      intro: Y(
+        '<p>Every run gets an automatic <code>GITHUB_TOKEN</code>, scoped by default according to your organization\'s settings &mdash; which, on many repositories, means broad read <em>and write</em> access to the whole repository for every job, whether it needs it or not. Explicitly setting <code>permissions:</code> at the top of the file overrides that default to the minimum necessary, and individual jobs can still request more where they genuinely need it.</p>'
+      ),
+      starter: Y(
+        'name: PR Automation',
+        'on:',
+        '  pull_request:',
+        '    branches: [main]',
+        'jobs:',
+        '  test:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: npm test',
+        '  comment:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: ./post-coverage-comment.sh'
+      ),
+      solution: Y(
+        'name: PR Automation',
+        'on:',
+        '  pull_request:',
+        '    branches: [main]',
+        'permissions:',
+        '  contents: read',
+        'jobs:',
+        '  test:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: npm test',
+        '  comment:',
+        '    runs-on: ubuntu-latest',
+        '    permissions:',
+        '      pull-requests: write',
+        '    steps:',
+        '      - run: ./post-coverage-comment.sh'
+      ),
+      hints: [
+        'Add a top-level <code>permissions: { contents: read }</code> block.',
+        'On the <code>comment</code> job specifically, add its own <code>permissions: { pull-requests: write }</code> &mdash; job-level permissions add to, not replace, the baseline.'
+      ],
+      checks: [
+        { label: 'Default token is read-only by default', test: api => api.parses && api.parsed.permissions?.contents === 'read' },
+        { label: '<code>comment</code> gets only the extra scope it needs', test: api => api.parses && api.job('comment').permissions?.['pull-requests'] === 'write' },
+      ],
+    },
+    {
+      id: 'm14-l2', title: 'Pin Third-Party Actions to a SHA',
+      objective: 'Pin a third-party action to its exact commit, not a tag the publisher could move.',
+      intro: Y(
+        '<p>A version tag is a pointer a publisher\'s account can repoint at any time &mdash; including, in a supply-chain compromise, by an attacker who gains access to that account. A commit SHA can\'t be silently swapped: it names one exact, immutable snapshot of the code that will run with your repository\'s secrets.</p>',
+        '<p class="tip">Teams that do this still keep a human-readable version number as a trailing comment, so nobody has to decode a 40-character hex string to know what they\'re running.</p>'
+      ),
+      starter: Y(
+        'name: Changed Files',
+        'on:',
+        '  pull_request:',
+        '    branches: [main]',
+        'jobs:',
+        '  diff:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - uses: tj-actions/changed-files@v44',
+        '        id: changed'
+      ),
+      solution: Y(
+        'name: Changed Files',
+        'on:',
+        '  pull_request:',
+        '    branches: [main]',
+        'jobs:',
+        '  diff:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - uses: tj-actions/changed-files@a1b40a2d2b8513184d926b5e62e07cbee8c1c1a0 # v44.5.1',
+        '        id: changed'
+      ),
+      hints: ['Replace <code>@v44</code> with <code>@a1b40a2d2b8513184d926b5e62e07cbee8c1c1a0</code>, and add <code># v44.5.1</code> afterward as a readable comment.'],
+      checks: [
+        { label: 'Pinned to a full 40-character commit SHA', test: api => api.parses && api.anyStepUses(/tj-actions\/changed-files@[0-9a-f]{40}/) },
+      ],
+    },
+    {
+      id: 'm14-l3', title: 'Avoiding pull_request_target Footguns',
+      objective: 'Stop running untrusted fork code in a context that has access to repository secrets.',
+      intro: Y(
+        '<p><code>pull_request_target</code> runs with the <em>base</em> repository\'s permissions and secrets &mdash; unlike plain <code>pull_request</code>, which runs with no secret access when the PR comes from a fork. That makes <code>pull_request_target</code> dangerous the moment a job also checks out and executes the PR\'s own code: a malicious fork can submit a PR whose test script simply exfiltrates every secret the job can see.</p>',
+        '<p>This job doesn\'t actually need any secret &mdash; it only builds and tests. The fix is to trigger it on plain <code>pull_request</code> instead, where that whole class of attack doesn\'t apply.</p>'
+      ),
+      starter: Y(
+        'name: PR Build',
+        'on:',
+        '  pull_request_target:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '        with:',
+        '          ref: ${{ github.event.pull_request.head.sha }}',
+        '      - run: npm ci && npm test'
+      ),
+      solution: Y(
+        'name: PR Build',
+        'on:',
+        '  pull_request:',
+        '    branches: [main]',
+        'jobs:',
+        '  build:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '        with:',
+        '          ref: ${{ github.event.pull_request.head.sha }}',
+        '      - run: npm ci && npm test'
+      ),
+      hints: ['Change <code>pull_request_target</code> to <code>pull_request</code> &mdash; nothing else about this job needs to change.'],
+      checks: [
+        { label: 'No longer uses the privileged trigger', test: api => api.parses && !api.parsed.on?.pull_request_target },
+        { label: 'Uses the safe trigger instead', test: api => api.parses && !!api.parsed.on?.pull_request },
+      ],
+    },
+  ],
+},
+{
+  id: 'm15', title: 'Capstone', blurb: 'Everything you\'ve learned, in one pipeline.',
+  lessons: [
+    {
+      id: 'm15-l1', title: 'Capstone: Ship It Like a Senior',
+      objective: 'Build a complete release pipeline from a blank file, meeting every requirement below.',
+      intro: Y(
+        '<p>No more fill-in-the-blank &mdash; this is a blank file and a specification. Everything from the last fifteen modules shows up somewhere in it. Work through the checklist on the right one item at a time; it maps directly onto the requirements below.</p>',
+        '<div class="ref-box"><div class="ref-title">Specification</div><ol class="spec-list">',
+        '<li>Trigger on push to <code>main</code>, and allow a manual run too.</li>',
+        '<li>Lock the default token to <code>contents: read</code> at the workflow level.</li>',
+        '<li>Cancel a superseded run of the same branch automatically.</li>',
+        '<li>A <code>test</code> job: checkout, matrix across Node 18 and 20, cached installs, then lint and test.</li>',
+        '<li>A <code>build-image</code> job, needing <code>test</code>, that logs in and pushes a Docker image to GHCR &mdash; but only on <code>main</code>.</li>',
+        '<li>A <code>deploy</code> job, needing <code>build-image</code>, gated behind the <code>production</code> environment, that assumes an AWS role over OIDC with no hardcoded credentials &mdash; only on <code>main</code>.</li>',
+        '</ol></div>'
+      ),
+      starter: Y(
+        '# Release Pipeline — build this from the specification in the briefing.',
+        'name: Release Pipeline',
+        'on: {}',
+        'jobs: {}'
+      ),
+      solution: Y(
+        'name: Release Pipeline',
+        'on:',
+        '  push:',
+        '    branches: [main]',
+        '  workflow_dispatch:',
+        'permissions:',
+        '  contents: read',
+        'concurrency:',
+        '  group: ${{ github.workflow }}-${{ github.ref }}',
+        '  cancel-in-progress: true',
+        'jobs:',
+        '  test:',
+        '    runs-on: ubuntu-latest',
+        '    strategy:',
+        '      matrix:',
+        '        node: [18, 20]',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - uses: actions/setup-node@v4',
+        '        with:',
+        '          node-version: ${{ matrix.node }}',
+        '      - uses: actions/cache@v4',
+        '        with:',
+        '          path: node_modules',
+        '          key: ${{ runner.os }}-modules-${{ hashFiles(\'**/package-lock.json\') }}',
+        '      - run: npm ci',
+        '      - run: npm run lint',
+        '      - run: npm test',
+        '  build-image:',
+        '    needs: test',
+        '    if: github.ref_name == \'main\'',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - uses: actions/checkout@v4',
+        '      - uses: docker/login-action@v3',
+        '        with:',
+        '          registry: ghcr.io',
+        '          username: ${{ github.actor }}',
+        '          password: ${{ secrets.GITHUB_TOKEN }}',
+        '      - uses: docker/build-push-action@v6',
+        '        with:',
+        '          push: true',
+        '          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}',
+        '  deploy:',
+        '    needs: build-image',
+        '    if: github.ref_name == \'main\'',
+        '    runs-on: ubuntu-latest',
+        '    environment: production',
+        '    permissions:',
+        '      id-token: write',
+        '      contents: read',
+        '    steps:',
+        '      - uses: aws-actions/configure-aws-credentials@v4',
+        '        with:',
+        '          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}',
+        '          aws-region: us-east-1',
+        '      - run: aws ecs update-service --cluster orbit --service api --force-new-deployment'
+      ),
+      hints: [
+        'Build it one requirement at a time, top to bottom &mdash; <code>on</code> and <code>permissions</code> and <code>concurrency</code> first, since nothing else depends on them.',
+        'Every piece here was its own earlier lesson: triggers (M2), needs (M3), matrix+cache (M7&ndash;M8), Docker (M11), environments+OIDC (M10&amp;M12). Revisit one if you\'re stuck on its syntax.',
+        'Remember the <code>if:</code> on both <code>build-image</code> and <code>deploy</code> &mdash; without it, a manual dispatch from a branch other than main would still try to ship.'
+      ],
+      checks: [
+        { label: 'Triggers on push to main and manual dispatch', test: api => api.parses && api.toArray(api.parsed.on?.push?.branches).includes('main') && api.parsed.on?.workflow_dispatch !== undefined },
+        { label: 'Default token locked to read-only', test: api => api.parses && api.parsed.permissions?.contents === 'read' },
+        { label: 'Cancels superseded runs of the same branch', test: api => api.parses && typeof api.parsed.concurrency?.group === 'string' && /github\.ref/.test(api.parsed.concurrency.group) && api.parsed.concurrency?.['cancel-in-progress'] === true },
+        { label: '<code>test</code> runs a Node matrix with caching', test: api => api.parses && api.hasJob('test') && Array.isArray(api.job('test').strategy?.matrix?.node) && api.job('test').strategy.matrix.node.length >= 2 && api.stepInJob('test', s => api.usesMatches(s, /actions\/cache@v\d/)) },
+        { label: '<code>test</code> checks out, lints, and tests', test: api => api.parses && api.stepInJob('test', s => api.usesMatches(s, /actions\/checkout@v\d/)) && api.stepInJob('test', s => api.runMatches(s, /lint/)) && api.stepInJob('test', s => api.runMatches(s, /test/)) },
+        { label: '<code>build-image</code> needs <code>test</code> and only runs on main', test: api => api.parses && api.hasJob('build-image') && api.needsOf('build-image').includes('test') && api.evalIf('build-image', { github: { ref_name: 'main' } }) === true && api.evalIf('build-image', { github: { ref_name: 'feature-x' } }) === false },
+        { label: '<code>build-image</code> pushes to GHCR', test: api => api.parses && api.stepInJob('build-image', s => api.usesMatches(s, /docker\/login-action@v\d/)) && api.stepInJob('build-image', s => api.usesMatches(s, /docker\/build-push-action@v\d/) && s.with?.push === true) },
+        { label: '<code>deploy</code> needs <code>build-image</code>, gated by the production environment', test: api => { if (!api.parses || !api.hasJob('deploy')) return false; const e = api.job('deploy').environment; return api.needsOf('deploy').includes('build-image') && (e === 'production' || e?.name === 'production'); } },
+        { label: '<code>deploy</code> uses OIDC, not static AWS keys', test: api => api.parses && api.hasJob('deploy') && (api.job('deploy').permissions?.['id-token'] === 'write') && api.stepInJob('deploy', s => api.usesMatches(s, /configure-aws-credentials@v\d/) && /secrets\./.test(String(s.with?.['role-to-assume'] || ''))) && !api.anyRawLineMatches(/AKIA[0-9A-Z]{10,}/) },
+      ],
+      scenarios: [
+        { id: 'main', label: 'Push to main', event: { name: 'push', refName: 'main' }, overrides: { protectedEnvironments: ['production'] } },
+        { id: 'feature', label: 'Manually dispatched from a feature branch', event: { name: 'workflow_dispatch', refName: 'feature-x' }, overrides: { protectedEnvironments: ['production'] } },
+        { id: 'manual', label: 'Manually dispatched from main', event: { name: 'workflow_dispatch', refName: 'main' }, overrides: { protectedEnvironments: ['production'] } },
+      ],
+    },
+  ],
+},
+];
+
+if (typeof module !== 'undefined') module.exports = { MODULES, Y };
+
+
+(function () {
+  'use strict';
+
+  /* ---------------- Storage helpers ---------------- */
+  function safeGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  function safeSet(key, val) { try { localStorage.setItem(key, val); } catch (e) {} }
+
+  var PROGRESS_KEY = 'pipelineAcademy.progress.v1';
+  var LAST_KEY = 'pipelineAcademy.last.v1';
+  function codeKey(id) { return 'pipelineAcademy.code.v1.' + id; }
+
+  var progress = new Set();
+  try { progress = new Set(JSON.parse(safeGet(PROGRESS_KEY) || '[]')); } catch (e) { progress = new Set(); }
+
+  /* ---------------- Flatten curriculum ---------------- */
+  var ALL = [];
+  MODULES.forEach(function (m, mi) {
+    m.lessons.forEach(function (l, li) { ALL.push({ lesson: l, module: m, mi: mi, li: li }); });
+  });
+  function findEntry(id) { for (var i = 0; i < ALL.length; i++) if (ALL[i].lesson.id === id) return ALL[i]; return null; }
+  function entryIndex(id) { for (var i = 0; i < ALL.length; i++) if (ALL[i].lesson.id === id) return i; return -1; }
+
+  /* ---------------- Simulated repository context ---------------- */
+  var DEFAULT_GITHUB = { repository: 'kpi-labs/orbit-api', actor: 'bohdan', sha: '9f1c3abddeadbeef9f1c3abddeadbeef9f1c3ab', run_number: 128, workflow: 'CI' };
+  var DEFAULT_SECRETS = { DEPLOY_TOKEN: 'x', AWS_ROLE_ARN: 'x', AZURE_CLIENT_ID: 'x', AZURE_TENANT_ID: 'x', AZURE_SUBSCRIPTION_ID: 'x', GITHUB_TOKEN: 'x' };
+
+  function buildContext(parsed, event) {
+    return {
+      github: {
+        repository: DEFAULT_GITHUB.repository, actor: DEFAULT_GITHUB.actor, sha: DEFAULT_GITHUB.sha,
+        run_number: DEFAULT_GITHUB.run_number, workflow: (parsed && parsed.name) || DEFAULT_GITHUB.workflow,
+        ref: (event.isTag ? 'refs/tags/' : 'refs/heads/') + (event.refName || 'main'),
+        ref_name: event.refName || 'main', base_ref: event.refName || 'main', event_name: event.name,
+      },
+      env: (parsed && parsed.env) || {},
+      secrets: DEFAULT_SECRETS,
+      vars: {},
+    };
+  }
+
+  function genericFaultHook(scenario) {
+    return function (jobKey, matrixVals, jobObj) {
+      var ov = scenario && scenario.overrides;
+      if (!ov) return null;
+      if (ov.forceFail === jobKey) {
+        var steps = jobObj.steps || [];
+        var idx = steps.length - 1;
+        var last = steps[idx] || {};
+        var label = last.name || (last.run ? String(last.run).split('\n')[0] : 'step');
+        return { stepIndex: idx, message: label + ' exited with a non-zero status.' };
+      }
+      if (ov.forceFailMatrix && ov.forceFailMatrix.jobKey === jobKey && matrixVals) {
+        var match = ov.forceFailMatrix.match;
+        var hit = Object.keys(match).every(function (k) { return String(matrixVals[k]) === String(match[k]); });
+        if (hit) {
+          var steps2 = jobObj.steps || [];
+          return { stepIndex: steps2.length - 1, message: ov.forceFailMatrix.message || 'Step failed.' };
+        }
+      }
+      return null;
+    };
+  }
+
+  /* ---------------- Lesson check API ---------------- */
+  function buildApi(rawText) {
+    var parsed = null, parses = true, parseError = null;
+    try { parsed = jsyaml.load(rawText); if (parsed == null || typeof parsed !== 'object') parsed = {}; }
+    catch (e) { parses = false; parsed = {}; parseError = e; }
+    var api = {
+      raw: rawText, parsed: parsed, parses: parses, parseError: parseError,
+      toArray: toArray,
+      hasJob: function (k) { return hasJob(parsed, k); },
+      job: function (k) { return job(parsed, k); },
+      needsOf: function (k) { return needsOf(parsed, k); },
+      stepsOf: function (k) { return stepsOf(parsed, k); },
+      stepInJob: function (k, pred) { return stepInJob(parsed, k, pred); },
+      anyStepUses: function (re) { return anyStepUses(parsed, re); },
+      anyStepRuns: function (re) { return anyStepRuns(parsed, re); },
+      usesMatches: usesMatches,
+      runMatches: runIncludes,
+      countStepRuns: function (re) {
+        return allSteps(parsed).reduce(function (n, s) {
+          if (typeof s.step.run !== 'string') return n;
+          var m = s.step.run.match(re);
+          return n + (m ? m.length : 0);
+        }, 0);
+      },
+      anyRawLineMatches: function (re) { return anyRawLineMatches(rawText, re); },
+      evalIf: function (jobKey, extraCtx) {
+        extraCtx = extraCtx || {};
+        var j = job(parsed, jobKey);
+        var expr = j.if !== undefined ? j.if : 'success()';
+        var ctx = Object.assign({ github: {}, env: {}, secrets: {}, matrix: {}, needs: {}, __jobStatus: 'success' }, extraCtx);
+        return !!evaluateExpression(String(expr), ctx);
+      },
+    };
+    return api;
+  }
+
+  /* ---------------- Small utilities ---------------- */
+  function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function delay(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
+  function debounce(fn, ms) { var t; return function () { var args = arguments, ctx = this; clearTimeout(t); t = setTimeout(function () { fn.apply(ctx, args); }, ms); }; }
+
+  /* ---------------- App state ---------------- */
+  var currentId = null;
+  var currentScenarioId = null;
+  var runToken = 0;
+  var hintsRevealed = 0;
+  var resetArmed = false, solutionArmed = false;
+  var pendingApprovals = Object.create(null);
+
+  var mainEl = document.getElementById('main');
+  var sidebarEl = document.getElementById('sidebar');
+  var progressFillEl = document.getElementById('progressFill');
+  var progressLabelEl = document.getElementById('progressLabel');
+  var layoutEl = document.getElementById('layout');
+
+  function scenariosFor(lesson) {
+    return (lesson.scenarios && lesson.scenarios.length) ? lesson.scenarios : [{ id: 'default', label: 'Push to main', event: { name: 'push', refName: 'main' } }];
+  }
+
+  /* ---------------- Sidebar ---------------- */
+  function renderSidebar() {
+    var html = '';
+    MODULES.forEach(function (m, mi) {
+      html += '<div class="module-group"><div class="module-head"><span class="module-num">' + (mi) + '</span><span>' + escapeHtml(m.title) + '</span></div>';
+      m.lessons.forEach(function (l) {
+        var done = progress.has(l.id);
+        var active = l.id === currentId;
+        html += '<button type="button" class="lesson-link' + (done ? ' done' : '') + (active ? ' active' : '') + '" data-lesson="' + l.id + '">' +
+          '<span class="dot">' + (done ? '✓' : '') + '</span><span class="label">' + escapeHtml(l.title) + '</span></button>';
+      });
+      html += '</div>';
+    });
+    sidebarEl.innerHTML = html;
+    sidebarEl.querySelectorAll('.lesson-link').forEach(function (btn) {
+      btn.addEventListener('click', function () { navigate(btn.getAttribute('data-lesson')); closeMobileSidebar(); });
+    });
+    var activeBtn = sidebarEl.querySelector('.lesson-link.active');
+    if (activeBtn && activeBtn.scrollIntoView) activeBtn.scrollIntoView({ block: 'nearest' });
+  }
+
+  function updateProgressUI() {
+    var pct = Math.round((progress.size / ALL.length) * 100);
+    progressFillEl.style.width = pct + '%';
+    progressLabelEl.textContent = progress.size + ' / ' + ALL.length;
+  }
+
+  function closeMobileSidebar() { layoutEl.classList.remove('sidebar-open'); }
+
+  /* ---------------- Lesson rendering ---------------- */
+  function renderLesson(id) {
+    var entry = findEntry(id);
+    if (!entry) { entry = ALL[0]; id = entry.lesson.id; }
+    currentId = id;
+    hintsRevealed = 0; resetArmed = false; solutionArmed = false;
+    var lesson = entry.lesson, mod = entry.module;
+    var scenarios = scenariosFor(lesson);
+    currentScenarioId = scenarios[0].id;
+
+    safeSet(LAST_KEY, id);
+    try { history.replaceState(null, '', '#' + id); } catch (e) {}
+
+    var tipHtml = lesson.tip ? '<p class="tip">' + lesson.tip + '</p>' : '';
+    var scenarioChips = scenarios.map(function (s, i) {
+      return '<button type="button" class="chip' + (i === 0 ? ' active' : '') + '" data-scenario="' + s.id + '">' + escapeHtml(s.label) + '</button>';
+    }).join('');
+
+    mainEl.innerHTML =
+      '<div class="lesson-eyebrow">Module ' + entry.mi + ' &middot; ' + escapeHtml(mod.title) + ' &middot; Lesson ' + (entry.li + 1) + '</div>' +
+      '<h1 class="lesson-title">' + escapeHtml(lesson.title) + '</h1>' +
+      '<div class="mission-banner"><span class="mission-label">Mission</span><span class="mission-text">' + escapeHtml(lesson.objective) + '</span></div>' +
+      '<div class="lesson-intro">' + lesson.intro + tipHtml + '</div>' +
+      '<div class="workbench">' +
+        '<div class="pane editor-pane">' +
+          '<div class="pane-header"><span>workflow.yml</span><div class="editor-actions">' +
+            '<button class="btn btn-ghost btn-sm" id="hintBtn" type="button">Hint</button>' +
+            '<button class="btn btn-ghost btn-sm" id="resetBtn" type="button">Reset</button>' +
+            '<button class="btn btn-ghost btn-sm" id="solutionBtn" type="button">Reveal solution</button>' +
+          '</div></div>' +
+          '<div class="editor-wrap">' +
+            '<div class="editor-gutter" id="editorGutter"></div>' +
+            '<div class="editor-stage" id="editorStage">' +
+              '<pre class="editor-highlight" id="editorHighlight" aria-hidden="true"></pre>' +
+              '<textarea class="editor-input" id="editorInput" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off"></textarea>' +
+            '</div>' +
+          '</div>' +
+          '<div id="errorStrip"></div>' +
+          '<div class="hint-box" id="hintBox" hidden></div>' +
+        '</div>' +
+        '<div class="pane run-pane">' +
+          '<div class="pane-header"><span>Simulate a run</span></div>' +
+          '<div class="run-pane-body">' +
+            (scenarios.length > 1 ? '<div class="scenario-row" id="scenarioRow">' + scenarioChips + '</div>' : '') +
+            '<button class="btn btn-accent btn-run" id="runBtn" type="button">&#9654; Run pipeline</button>' +
+            '<div class="run-output" id="runOutput"><div class="run-empty">Click Run to see what GitHub Actions would actually do with this file.</div></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="checklist-panel">' +
+        '<div class="pane-header"><span>Mission checklist</span><span class="checklist-count" id="checklistCount"></span></div>' +
+        '<ul class="checklist" id="checklist"></ul>' +
+        '<div class="lesson-complete" id="lessonComplete" hidden><span class="lesson-complete-text">Mission complete.</span><button class="btn btn-accent" id="nextBtn" type="button">Next lesson &rarr;</button></div>' +
+      '</div>';
+
+    mainEl.scrollTop = 0; window.scrollTo(0, 0);
+
+    var editorInput = document.getElementById('editorInput');
+    var saved = safeGet(codeKey(id));
+    editorInput.value = saved != null ? saved : lesson.starter;
+
+    wireEditor(lesson);
+    wireScenarioRow();
+    wireActions(lesson);
+    syncEditorVisuals();
+    resetEditorScroll();
+    runChecklist();
+    renderSidebar();
+  }
+
+  /* ---------------- Editor ---------------- */
+  function syncEditorVisuals() {
+    var input = document.getElementById('editorInput');
+    var hi = document.getElementById('editorHighlight');
+    var gutter = document.getElementById('editorGutter');
+    hi.innerHTML = highlightYaml(input.value) + '\n';
+    var lineCount = input.value.split('\n').length;
+    var nums = [];
+    for (var i = 1; i <= lineCount; i++) nums.push(i);
+    gutter.textContent = nums.join('\n');
+  }
+
+  // Whenever the editor's value is replaced wholesale (switching lessons, Reset, Reveal solution),
+  // the caret otherwise lands wherever the browser's value-assignment left it -- usually the end of
+  // the file -- which scrolls the pane there too. Force it back to a clean top-left resting state.
+  function resetEditorScroll() {
+    var input = document.getElementById('editorInput');
+    var hi = document.getElementById('editorHighlight');
+    var gutter = document.getElementById('editorGutter');
+    if (!input) return;
+    input.setSelectionRange(0, 0);
+    input.scrollTop = 0; input.scrollLeft = 0;
+    if (hi) hi.style.transform = 'translate(0px,0px)';
+    if (gutter) gutter.scrollTop = 0;
+  }
+
+  function wireEditor(lesson) {
+    var input = document.getElementById('editorInput');
+    var hi = document.getElementById('editorHighlight');
+    var gutter = document.getElementById('editorGutter');
+    var stage = document.getElementById('editorStage');
+
+    input.addEventListener('input', function () {
+      syncEditorVisuals();
+      safeSet(codeKey(lesson.id), input.value);
+      debouncedChecklist();
+    });
+    input.addEventListener('scroll', function () {
+      hi.style.transform = 'translate(' + (-input.scrollLeft) + 'px,' + (-input.scrollTop) + 'px)';
+      gutter.scrollTop = input.scrollTop;
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        var s = input.selectionStart, en = input.selectionEnd;
+        input.setRangeText('  ', s, en, 'end');
+        syncEditorVisuals();
+        safeSet(codeKey(lesson.id), input.value);
+        debouncedChecklist();
+      }
+    });
+  }
+
+  var debouncedChecklist = debounce(function () { runChecklist(); }, 220);
+
+  /* ---------------- Checklist ---------------- */
+  function runChecklist() {
+    var entry = findEntry(currentId);
+    var lesson = entry.lesson;
+    var input = document.getElementById('editorInput');
+    if (!input) return;
+    var api = buildApi(input.value);
+    var errorStrip = document.getElementById('errorStrip');
+    if (!api.parses) {
+      var msg = api.parseError && api.parseError.message ? api.parseError.message.split('\n')[0] : 'The file could not be parsed.';
+      errorStrip.innerHTML = '<span>&#9888;</span><span>YAML syntax error: ' + escapeHtml(msg) + '</span>';
+    } else {
+      errorStrip.innerHTML = '';
+    }
+    var results = lesson.checks.map(function (c) {
+      var pass = false;
+      try { pass = !!c.test(api); } catch (e) { pass = false; }
+      return { label: c.label, pass: pass };
+    });
+    var listEl = document.getElementById('checklist');
+    listEl.innerHTML = results.map(function (r) {
+      return '<li class="' + (r.pass ? 'pass' : 'fail') + '"><span class="mk">' + (r.pass ? '✓' : '') + '</span><span>' + r.label + '</span></li>';
+    }).join('');
+    var passCount = results.filter(function (r) { return r.pass; }).length;
+    document.getElementById('checklistCount').textContent = passCount + ' / ' + results.length;
+
+    var allPass = api.parses && passCount === results.length && results.length > 0;
+    var completeBox = document.getElementById('lessonComplete');
+    if (allPass) {
+      completeBox.hidden = false;
+      if (!progress.has(lesson.id)) {
+        progress.add(lesson.id);
+        safeSet(PROGRESS_KEY, JSON.stringify(Array.from(progress)));
+        updateProgressUI();
+        renderSidebar();
+      }
+      var nextBtn = document.getElementById('nextBtn');
+      var idx = entryIndex(lesson.id);
+      var next = ALL[idx + 1];
+      if (next) {
+        nextBtn.hidden = false;
+        nextBtn.textContent = 'Next lesson →';
+        nextBtn.onclick = function () { navigate(next.lesson.id); };
+      } else {
+        nextBtn.hidden = true;
+        completeBox.querySelector('.lesson-complete-text').textContent = 'Mission complete — you’ve finished the whole curriculum.';
+      }
+    } else {
+      completeBox.hidden = true;
+    }
+  }
+
+  /* ---------------- Hint / Reset / Solution ---------------- */
+  function wireActions(lesson) {
+    var hintBtn = document.getElementById('hintBtn');
+    var hintBox = document.getElementById('hintBox');
+    hintBtn.addEventListener('click', function () {
+      if (!lesson.hints || !lesson.hints.length) return;
+      if (hintsRevealed < lesson.hints.length) hintsRevealed++;
+      hintBox.hidden = false;
+      hintBox.innerHTML = '<ol>' + lesson.hints.slice(0, hintsRevealed).map(function (h) { return '<li>' + h + '</li>'; }).join('') + '</ol>' +
+        (hintsRevealed < lesson.hints.length ? '' : '<div style="color:var(--muted);font-size:12px;">That\'s every hint for this one.</div>');
+      hintBtn.textContent = hintsRevealed < lesson.hints.length ? 'Another hint' : 'No more hints';
+    });
+
+    var resetBtn = document.getElementById('resetBtn');
+    resetBtn.addEventListener('click', function () {
+      if (!resetArmed) {
+        resetArmed = true;
+        resetBtn.textContent = 'Click again to reset';
+        setTimeout(function () { resetArmed = false; resetBtn.textContent = 'Reset'; }, 3000);
+        return;
+      }
+      var input = document.getElementById('editorInput');
+      input.value = lesson.starter;
+      safeSet(codeKey(lesson.id), input.value);
+      syncEditorVisuals();
+      resetEditorScroll();
+      runChecklist();
+      resetArmed = false; resetBtn.textContent = 'Reset';
+    });
+
+    var solutionBtn = document.getElementById('solutionBtn');
+    solutionBtn.addEventListener('click', function () {
+      if (!solutionArmed) {
+        solutionArmed = true;
+        solutionBtn.textContent = 'Click again to reveal';
+        setTimeout(function () { solutionArmed = false; solutionBtn.textContent = 'Reveal solution'; }, 3000);
+        return;
+      }
+      var input = document.getElementById('editorInput');
+      input.value = lesson.solution;
+      safeSet(codeKey(lesson.id), input.value);
+      syncEditorVisuals();
+      resetEditorScroll();
+      runChecklist();
+      solutionArmed = false; solutionBtn.textContent = 'Reveal solution';
+    });
+
+    document.getElementById('runBtn').addEventListener('click', function () { doRun(lesson); });
+  }
+
+  function wireScenarioRow() {
+    var row = document.getElementById('scenarioRow');
+    if (!row) return;
+    row.querySelectorAll('.chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        row.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('active'); });
+        chip.classList.add('active');
+        currentScenarioId = chip.getAttribute('data-scenario');
+      });
+    });
+  }
+
+  /* ---------------- Run simulation ---------------- */
+  function stepGlyph(status) {
+    if (status === 'done') return '✓';
+    if (status === 'failed') return '✗';
+    if (status === 'running') return '●';
+    if (status === 'skipped') return '—';
+    return '·';
+  }
+
+  function renderNodeSkeleton(node) {
+    var stepsHtml = node.steps.map(function (s) {
+      return '<li data-step="1" class="pending"><span class="mk">' + stepGlyph('pending') + '</span><span class="t">' + escapeHtml(s.name) + '</span></li>';
+    }).join('');
+    return '<div class="dag-node" data-status="pending" data-node="' + node.id + '">' +
+      '<div class="dag-node-head"><span class="dag-node-name">' + escapeHtml(node.label) + '</span><span class="status-pill pending">queued</span></div>' +
+      (node.matrixLabel ? '<div class="dag-node-matrix">' + escapeHtml(node.matrixLabel) + '</div>' : '') +
+      '<ul class="step-list">' + stepsHtml + '</ul>' +
+      '<div class="approve-slot"></div>' +
+    '</div>';
+  }
+
+  function renderDagSkeleton(plan) {
+    var byLevel = {};
+    plan.nodes.forEach(function (n) { (byLevel[n.level] = byLevel[n.level] || []).push(n); });
+    var levelKeys = Object.keys(byLevel).map(Number).sort(function (a, b) { return a - b; });
+    var html = '<div class="dag" id="dagRoot"><div id="dagBanner"></div>';
+    levelKeys.forEach(function (lvl, i) {
+      if (i > 0) html += '<div class="dag-arrow">↓ then</div>';
+      html += '<div class="dag-level">' + byLevel[lvl].map(renderNodeSkeleton).join('') + '</div>';
+    });
+    html += '</div><div class="console" id="consoleEl"></div>';
+    return html;
+  }
+
+  function appendLog(consoleEl, text, cls) {
+    var div = document.createElement('div');
+    div.className = 'line ' + (cls || '');
+    div.textContent = text;
+    consoleEl.appendChild(div);
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+  }
+
+  function setNodeStatus(outputEl, node, status, pillText) {
+    var el = outputEl.querySelector('[data-node="' + node.id + '"]');
+    if (!el) return;
+    el.setAttribute('data-status', status);
+    var pill = el.querySelector('.status-pill');
+    pill.className = 'status-pill ' + status;
+    pill.textContent = pillText || status;
+  }
+
+  function skipReason(node) {
+    if (node.ifExpr) return 'if: ' + node.ifExpr + ' evaluated to false.';
+    return 'A required job did not succeed.';
+  }
+
+  async function animateNode(outputEl, consoleEl, node, scenario, myToken) {
+    if (runToken !== myToken) return;
+    var el = outputEl.querySelector('[data-node="' + node.id + '"]');
+    if (!el) return;
+
+    if (node.status === 'skipped') {
+      setNodeStatus(outputEl, node, 'skipped', 'skipped');
+      el.querySelectorAll('.step-list li').forEach(function (li) { li.className = 'skipped'; li.querySelector('.mk').textContent = stepGlyph('skipped'); });
+      appendLog(consoleEl, '⏭  ' + node.label + ' skipped — ' + skipReason(node), 'dim');
+      return;
+    }
+    if (node.status === 'cancelled') {
+      setNodeStatus(outputEl, node, 'cancelled', 'cancelled');
+      el.querySelectorAll('.step-list li').forEach(function (li) { li.className = 'skipped'; li.querySelector('.mk').textContent = stepGlyph('skipped'); });
+      appendLog(consoleEl, '⛔  ' + node.label + ' cancelled', 'dim');
+      return;
+    }
+
+    setNodeStatus(outputEl, node, 'running', 'running');
+    appendLog(consoleEl, '▶  Job: ' + node.label + (node.matrixLabel ? ' (' + node.matrixLabel + ')' : ''), 'sys');
+
+    var stepLis = el.querySelectorAll('.step-list li');
+    var failed = false;
+    for (var i = 0; i < node.steps.length; i++) {
+      if (runToken !== myToken) return;
+      var step = node.steps[i];
+      var li = stepLis[i];
+      if (failed || step.skippedAfterFailure) { li.className = 'skipped'; li.querySelector('.mk').textContent = stepGlyph('skipped'); continue; }
+      li.className = 'running'; li.querySelector('.mk').textContent = stepGlyph('running');
+      await delay(260);
+      if (runToken !== myToken) return;
+      var cmdText = step.kind === 'uses' ? ('Run ' + (step.raw.uses || '')) : interpolate(step.raw.run || '', node.ctx || {});
+      appendLog(consoleEl, '$ ' + cmdText, 'cmd');
+      if (step.fail) {
+        appendLog(consoleEl, 'Error: ' + step.failMessage, 'err');
+        li.className = 'failed'; li.querySelector('.mk').textContent = stepGlyph('failed');
+        failed = true;
+      } else {
+        appendLog(consoleEl, canned(step), 'ok');
+        li.className = 'done'; li.querySelector('.mk').textContent = stepGlyph('done');
+      }
+    }
+
+    if (failed) { setNodeStatus(outputEl, node, 'failure', 'failed'); return; }
+
+    if (node.environment && scenario.overrides && scenario.overrides.protectedEnvironments && scenario.overrides.protectedEnvironments.indexOf(node.environment) !== -1) {
+      setNodeStatus(outputEl, node, 'waiting', 'needs approval');
+      appendLog(consoleEl, '⏸  Waiting for approval to deploy to ' + node.environment + '…', 'sys');
+      var slot = el.querySelector('.approve-slot');
+      slot.innerHTML = '<div class="approve-row"><span>Environment: <strong>' + escapeHtml(node.environment) + '</strong></span><button class="btn btn-accent btn-sm" type="button">Approve</button></div>';
+      await new Promise(function (resolve) {
+        slot.querySelector('button').addEventListener('click', function () { slot.innerHTML = ''; resolve(); }, { once: true });
+      });
+      if (runToken !== myToken) return;
+      appendLog(consoleEl, '✓  Deployment to ' + node.environment + ' approved', 'sys');
+    }
+
+    setNodeStatus(outputEl, node, 'success', 'success');
+  }
+
+  function canned(step) {
+    if (step.kind === 'uses') {
+      var u = String(step.raw.uses || '');
+      if (/checkout/.test(u)) return 'Cloning into \'.\'... done.';
+      if (/setup-node/.test(u)) return 'Node.js installed, added to PATH.';
+      if (/cache/.test(u)) return 'Cache restored from key match.';
+      if (/upload-artifact/.test(u)) return 'Artifact uploaded successfully.';
+      if (/download-artifact/.test(u)) return 'Artifact downloaded successfully.';
+      if (/login-action/.test(u)) return 'Login Succeeded.';
+      if (/build-push-action/.test(u)) return 'Image built and pushed.';
+      if (/configure-aws-credentials/.test(u)) return 'Assumed role via OIDC. Credentials configured.';
+      if (/azure\/login/.test(u)) return 'Login successful via federated credential.';
+      return 'Completed successfully.';
+    }
+    return 'Process completed with exit code 0.';
+  }
+
+  async function doRun(lesson) {
+    var input = document.getElementById('editorInput');
+    var api = buildApi(input.value);
+    var outputEl = document.getElementById('runOutput');
+    var myToken = ++runToken;
+
+    if (!api.parses) {
+      var msg = api.parseError && api.parseError.message ? api.parseError.message : 'The file does not parse.';
+      outputEl.innerHTML = '<div class="trigger-skip"><strong>Can\'t run — YAML syntax error.</strong>' + escapeHtml(msg.split('\n')[0]) + '</div>';
+      return;
+    }
+
+    var scenarios = scenariosFor(lesson);
+    var scenario = scenarios.filter(function (s) { return s.id === currentScenarioId; })[0] || scenarios[0];
+    var event = scenario.event || { name: 'push', refName: 'main' };
+    var trig = evaluateTrigger(api.parsed.on, event);
+    if (!trig.fires) {
+      outputEl.innerHTML = '<div class="trigger-skip"><strong>Workflow did not run.</strong>' + escapeHtml(trig.reason) + '</div>';
+      return;
+    }
+
+    var ctx = buildContext(api.parsed, event);
+    var plan;
+    try { plan = planRun(api.parsed, ctx, genericFaultHook(scenario)); }
+    catch (e) { outputEl.innerHTML = '<div class="trigger-skip"><strong>Could not build the job graph.</strong>' + escapeHtml(e.message) + '</div>'; return; }
+
+    if (plan.nodes.length === 0) {
+      outputEl.innerHTML = '<div class="trigger-skip"><strong>Workflow triggers, but defines no jobs yet.</strong>Add at least one job under <code>jobs:</code>.</div>';
+      return;
+    }
+
+    outputEl.innerHTML = renderDagSkeleton(plan);
+    var consoleEl = document.getElementById('consoleEl');
+    appendLog(consoleEl, '# ' + trig.reason, 'sys');
+
+    var byLevel = {};
+    plan.nodes.forEach(function (n) { (byLevel[n.level] = byLevel[n.level] || []).push(n); });
+    var levelKeys = Object.keys(byLevel).map(Number).sort(function (a, b) { return a - b; });
+
+    var supersededFired = false, supersededCancel = false;
+    if (scenario.overrides && scenario.overrides.simulateSupersededRun) {
+      setTimeout(function () {
+        if (runToken !== myToken || supersededFired) return;
+        supersededFired = true;
+        var cancelInProgress = !!(api.parsed.concurrency && api.parsed.concurrency['cancel-in-progress'] === true);
+        supersededCancel = cancelInProgress;
+        var banner = document.getElementById('dagBanner');
+        if (banner) {
+          banner.innerHTML = '<div class="run-banner skip" style="margin-bottom:10px;">⚡ A newer commit landed on the same branch while this run was still going' +
+            (cancelInProgress ? ' — cancelling the rest of this run.' : ' — and because cancel-in-progress isn’t set, both runs are now racing.') + '</div>';
+        }
+        appendLog(consoleEl, cancelInProgress ? 'A newer run superseded this one. Cancelling remaining jobs.' : 'Warning: a second run has started for the same ref. No cancellation configured.', 'sys');
+      }, 1300);
+    }
+
+    for (var li = 0; li < levelKeys.length; li++) {
+      if (runToken !== myToken) return;
+      var nodesHere = byLevel[levelKeys[li]];
+      if (supersededCancel) {
+        nodesHere.forEach(function (n) { n.status = 'cancelled'; });
+      }
+      await Promise.all(nodesHere.map(function (n) { return animateNode(outputEl, consoleEl, n, scenario, myToken); }));
+      await delay(150);
+    }
+    if (runToken !== myToken) return;
+
+    var finalStatuses = plan.nodes.map(function (n) {
+      var el = outputEl.querySelector('[data-node="' + n.id + '"]');
+      return el ? el.getAttribute('data-status') : n.status;
+    });
+    var overall = finalStatuses.indexOf('failure') !== -1 ? 'failure'
+      : finalStatuses.indexOf('cancelled') !== -1 && finalStatuses.every(function (s) { return s === 'cancelled' || s === 'skipped'; }) ? 'cancelled'
+      : finalStatuses.every(function (s) { return s === 'skipped'; }) ? 'skip'
+      : 'success';
+    var banner = document.getElementById('dagBanner');
+    var bannerText = overall === 'success' ? '✓ Run completed successfully.' : overall === 'failure' ? '✗ Run failed.' : overall === 'cancelled' ? '⛔ Run cancelled.' : '⏭ Every job was skipped.';
+    if (banner) banner.insertAdjacentHTML('beforeend', '<div class="run-banner ' + overall + '">' + bannerText + '</div>');
+  }
+
+  /* ---------------- Boot ---------------- */
+  function navigate(id) { renderLesson(id); }
+
+  function initialLessonId() {
+    var hash = (location.hash || '').replace(/^#/, '');
+    if (hash && findEntry(hash)) return hash;
+    var last = safeGet(LAST_KEY);
+    if (last && findEntry(last)) return last;
+    return ALL[0].lesson.id;
+  }
+
+  document.getElementById('sidebarToggle').addEventListener('click', function () { layoutEl.classList.toggle('sidebar-open'); });
+  document.getElementById('sidebarScrim').addEventListener('click', closeMobileSidebar);
+
+  updateProgressUI();
+  renderLesson(initialLessonId());
+})();
+
+</script>
