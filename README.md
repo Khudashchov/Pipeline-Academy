@@ -1,6 +1,6 @@
 # Pipeline Academy
 
-An interactive, [learngitbranching](https://learngitbranching.js.org/)-style course that teaches
+An interactive, hands-on course that teaches
 developers GitHub Actions CI/CD from zero knowledge of YAML to the patterns senior engineers use
 in production: triggers, job graphs, matrix builds, caching, reusable workflows, environments and
 approval gates, Docker, deploying to AWS/Azure via OIDC, monorepo path filters, and security
