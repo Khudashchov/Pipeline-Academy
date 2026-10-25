@@ -12,6 +12,8 @@ let schedulerJs = read('engine/scheduler.js');
 let helpersJs = read('lessons/helpers.js');
 let highlightJs = read('ui/highlight.js');
 let lessonsJs = read('lessons/lessons.js');
+let lessonsUkJs = read('lessons/lessons.uk.js');
+let i18nJs = read('i18n/i18n.js');
 let appJs = read('ui/app.js');
 
 // Strip the one Node-only require() line so the file runs as a plain concatenated <script> in the
@@ -29,7 +31,7 @@ exprJs = stripBareExports(exprJs);
 triggersJs = stripBareExports(triggersJs);
 schedulerJs = stripBareExports(schedulerJs);
 
-for (const [name, src] of [['expr.js', exprJs], ['triggers.js', triggersJs], ['scheduler.js', schedulerJs], ['helpers.js', helpersJs], ['highlight.js', highlightJs], ['lessons.js', lessonsJs]]) {
+for (const [name, src] of [['expr.js', exprJs], ['triggers.js', triggersJs], ['scheduler.js', schedulerJs], ['helpers.js', helpersJs], ['highlight.js', highlightJs], ['lessons.js', lessonsJs], ['lessons.uk.js', lessonsUkJs], ['i18n.js', i18nJs]]) {
   if (/\brequire\(/.test(src)) throw new Error(`${name} still contains a require() call -- would break in the browser bundle`);
   if (/^module\.exports/m.test(src)) throw new Error(`${name} still contains a bare module.exports -- would throw in the browser bundle`);
 }
@@ -48,6 +50,7 @@ ${style}
       <div class="brand"><span class="brand-mark">PA</span><span class="brand-name">Pipeline Academy</span></div>
       <div class="topbar-spacer"></div>
       <div class="progress-pill"><div class="progress-track"><div class="progress-fill" id="progressFill"></div></div><span class="progress-label" id="progressLabel">0 / 0</span></div>
+      <button class="lang-toggle" id="langToggle" type="button">УКР</button>
     </div>
   </header>
   <div class="layout" id="layout">
@@ -56,7 +59,7 @@ ${style}
     <main class="main" id="main"></main>
   </div>
 </div>
-<p class="lab-note">Pipeline Academy is a simulation: it parses real YAML and follows GitHub Actions' real trigger, dependency, matrix, and expression rules, but no code actually runs and no repository is touched. Progress is saved in this browser only.</p>
+<p class="lab-note" id="labNote">Pipeline Academy is a simulation: it parses real YAML and follows GitHub Actions' real trigger, dependency, matrix, and expression rules, but no code actually runs and no repository is touched. Progress is saved in this browser only.</p>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
 <script>
@@ -71,6 +74,10 @@ ${helpersJs}
 ${highlightJs}
 
 ${lessonsJs}
+
+${lessonsUkJs}
+
+${i18nJs}
 
 ${appJs}
 </script>

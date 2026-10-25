@@ -131,6 +131,11 @@ button { font-family: var(--font-display); }
 .sidebar-toggle { display: none; }
 .topbar-spacer { flex: 1; }
 .progress-pill { display: flex; align-items: center; gap: 10px; }
+.lang-toggle {
+  margin-left: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--fg);
+  border-radius: 8px; padding: 6px 10px; font: 600 12px/1 var(--font-mono); letter-spacing: 0.04em; cursor: pointer;
+}
+.lang-toggle:hover { border-color: var(--accent); color: var(--accent); }
 .progress-track { width: 120px; height: 6px; border-radius: 999px; background: var(--surface-sunken); overflow: hidden; }
 .progress-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.4s ease; }
 .progress-label { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -316,6 +321,8 @@ button { font-family: var(--font-display); }
 /* ---------- Mobile ---------- */
 @media (max-width: 880px) {
   .brand-name { display: none; }
+  .progress-track { width: 56px; }
+  .lang-toggle { margin-left: 0; }
   .sidebar-toggle {
     display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface);
     color: var(--fg); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; cursor: pointer; font-family: var(--font-body);
@@ -347,6 +354,7 @@ button { font-family: var(--font-display); }
       <div class="brand"><span class="brand-mark">PA</span><span class="brand-name">Pipeline Academy</span></div>
       <div class="topbar-spacer"></div>
       <div class="progress-pill"><div class="progress-track"><div class="progress-fill" id="progressFill"></div></div><span class="progress-label" id="progressLabel">0 / 0</span></div>
+      <button class="lang-toggle" id="langToggle" type="button">УКР</button>
     </div>
   </header>
   <div class="layout" id="layout">
@@ -355,7 +363,7 @@ button { font-family: var(--font-display); }
     <main class="main" id="main"></main>
   </div>
 </div>
-<p class="lab-note">Pipeline Academy is a simulation: it parses real YAML and follows GitHub Actions' real trigger, dependency, matrix, and expression rules, but no code actually runs and no repository is touched. Progress is saved in this browser only.</p>
+<p class="lab-note" id="labNote">Pipeline Academy is a simulation: it parses real YAML and follows GitHub Actions' real trigger, dependency, matrix, and expression rules, but no code actually runs and no repository is touched. Progress is saved in this browser only.</p>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
 <script>
@@ -633,38 +641,38 @@ function normalizeOn(onRaw) {
 function evaluateTrigger(onRaw, event) {
   const on = normalizeOn(onRaw);
   const name = event.name;
-  if (!(name in on)) return { fires: false, reason: `workflow has no "${name}" trigger configured` };
+  if (!(name in on)) return { fires: false, code: 'noTrigger', params: { name }, reason: `workflow has no "${name}" trigger configured` };
   const cfg = on[name] || {};
 
   if (name === 'push') {
-    if (cfg['branches-ignore'] && matchesAny(event.refName, cfg['branches-ignore'])) return { fires: false, reason: `${event.refName} matches branches-ignore` };
-    if (cfg.branches && !matchesAny(event.refName, cfg.branches)) return { fires: false, reason: `${event.refName} does not match branches filter` };
-    if (cfg['tags-ignore'] && event.isTag && matchesAny(event.refName, cfg['tags-ignore'])) return { fires: false, reason: 'tag matches tags-ignore' };
-    if (cfg.tags && event.isTag && !matchesAny(event.refName, cfg.tags)) return { fires: false, reason: 'tag does not match tags filter' };
+    if (cfg['branches-ignore'] && matchesAny(event.refName, cfg['branches-ignore'])) return { fires: false, code: 'branchIgnored', params: { ref: event.refName }, reason: `${event.refName} matches branches-ignore` };
+    if (cfg.branches && !matchesAny(event.refName, cfg.branches)) return { fires: false, code: 'branchNoMatch', params: { ref: event.refName }, reason: `${event.refName} does not match branches filter` };
+    if (cfg['tags-ignore'] && event.isTag && matchesAny(event.refName, cfg['tags-ignore'])) return { fires: false, code: 'tagIgnored', params: {}, reason: 'tag matches tags-ignore' };
+    if (cfg.tags && event.isTag && !matchesAny(event.refName, cfg.tags)) return { fires: false, code: 'tagNoMatch', params: {}, reason: 'tag does not match tags filter' };
     if (event.paths) {
-      if (cfg['paths-ignore'] && event.paths.every(p => matchesAny(p, cfg['paths-ignore']))) return { fires: false, reason: 'all changed paths match paths-ignore' };
-      if (cfg.paths && !event.paths.some(p => matchesAny(p, cfg.paths))) return { fires: false, reason: 'no changed path matches the paths filter' };
+      if (cfg['paths-ignore'] && event.paths.every(p => matchesAny(p, cfg['paths-ignore']))) return { fires: false, code: 'pathsIgnored', params: {}, reason: 'all changed paths match paths-ignore' };
+      if (cfg.paths && !event.paths.some(p => matchesAny(p, cfg.paths))) return { fires: false, code: 'pathsNoMatch', params: {}, reason: 'no changed path matches the paths filter' };
     }
-    return { fires: true, reason: `push to ${event.refName} matches configured filters` };
+    return { fires: true, code: 'pushMatch', params: { ref: event.refName }, reason: `push to ${event.refName} matches configured filters` };
   }
 
   if (name === 'pull_request' || name === 'pull_request_target') {
     const defaultTypes = ['opened', 'synchronize', 'reopened'];
     const types = cfg.types || defaultTypes;
-    if (event.prAction && !types.includes(event.prAction)) return { fires: false, reason: `activity type "${event.prAction}" is not in types: [${types.join(', ')}]` };
-    if (cfg['branches-ignore'] && matchesAny(event.refName, cfg['branches-ignore'])) return { fires: false, reason: `base branch ${event.refName} matches branches-ignore` };
-    if (cfg.branches && !matchesAny(event.refName, cfg.branches)) return { fires: false, reason: `base branch ${event.refName} does not match branches filter` };
+    if (event.prAction && !types.includes(event.prAction)) return { fires: false, code: 'typeNotListed', params: { action: event.prAction, types: types.join(', ') }, reason: `activity type "${event.prAction}" is not in types: [${types.join(', ')}]` };
+    if (cfg['branches-ignore'] && matchesAny(event.refName, cfg['branches-ignore'])) return { fires: false, code: 'baseIgnored', params: { ref: event.refName }, reason: `base branch ${event.refName} matches branches-ignore` };
+    if (cfg.branches && !matchesAny(event.refName, cfg.branches)) return { fires: false, code: 'baseNoMatch', params: { ref: event.refName }, reason: `base branch ${event.refName} does not match branches filter` };
     if (event.paths) {
-      if (cfg['paths-ignore'] && event.paths.every(p => matchesAny(p, cfg['paths-ignore']))) return { fires: false, reason: 'all changed paths match paths-ignore' };
-      if (cfg.paths && !event.paths.some(p => matchesAny(p, cfg.paths))) return { fires: false, reason: 'no changed path matches the paths filter' };
+      if (cfg['paths-ignore'] && event.paths.every(p => matchesAny(p, cfg['paths-ignore']))) return { fires: false, code: 'pathsIgnored', params: {}, reason: 'all changed paths match paths-ignore' };
+      if (cfg.paths && !event.paths.some(p => matchesAny(p, cfg.paths))) return { fires: false, code: 'pathsNoMatch', params: {}, reason: 'no changed path matches the paths filter' };
     }
-    return { fires: true, reason: `${name} (${event.prAction || 'opened'}) targeting ${event.refName} matches configured filters` };
+    return { fires: true, code: 'prMatch', params: { name, action: event.prAction || 'opened', ref: event.refName }, reason: `${name} (${event.prAction || 'opened'}) targeting ${event.refName} matches configured filters` };
   }
 
-  if (name === 'schedule') return { fires: true, reason: 'scheduled trigger fired on cron' };
-  if (name === 'workflow_dispatch') return { fires: true, reason: 'manually dispatched from the Actions tab' };
-  if (name === 'workflow_call') return { fires: true, reason: 'invoked by a caller workflow' };
-  return { fires: true, reason: `${name} event received` };
+  if (name === 'schedule') return { fires: true, code: 'schedule', params: {}, reason: 'scheduled trigger fired on cron' };
+  if (name === 'workflow_dispatch') return { fires: true, code: 'dispatch', params: {}, reason: 'manually dispatched from the Actions tab' };
+  if (name === 'workflow_call') return { fires: true, code: 'call', params: {}, reason: 'invoked by a caller workflow' };
+  return { fires: true, code: 'other', params: { name }, reason: `${name} event received` };
 }
 
 
@@ -2619,6 +2627,781 @@ const MODULES = [
 if (typeof module !== 'undefined') module.exports = { MODULES, Y };
 
 
+// Ukrainian overlay for lessons.js, keyed by module / lesson id. Only prose is translated: titles,
+// objectives, intros, tips, hints, checklist labels (same order as the English checks) and scenario
+// labels (by scenario id). Starter/solution YAML is shared with English. Missing fields fall back
+// to English at render time; test/i18n.test.js keeps the shapes in sync with lessons.js.
+
+const LESSONS_UK = {
+  'm0': { title: 'Орієнтація', blurb: 'Що таке пайплайн взагалі, ще до того, як ти торкнешся YAML.' },
+  'm0-l1': {
+    title: 'Знайомство з пайплайном',
+    objective: 'Дай джобі раннер, на якому вона виконуватиметься, і подивись, як вона запрацює.',
+    intro: [
+      '<p>Кожен пайплайн GitHub Actions починається з одного файлу: <code>.yml</code> всередині <code>.github/workflows/</code>. GitHub стежить за подіями у твоєму репозиторії &mdash; пуш, пул-реквест, розклад &mdash; і коли подія збігається з блоком <code>on:</code> воркфлоу, він піднімає свіжу віртуальну машину, витягує твій код і виконує написані тобою <code>steps:</code> по черзі, згори донизу.</p>',
+      '<p>Ось і весь фокус. Жодних демонів, жодних серверів, які треба няньчити &mdash; лише YAML-файл, що описує, що має статися і коли. У цій лабораторії ти напишеш десятки таких файлів: від порожнього аркуша до пайплайна, який сеньйор-інженер викочує в продакшн.</p>',
+      '<p class="tip"><strong>У цьому уроці:</strong> воркфлоу нижче майже готовий. Він лише не каже, <em>де</em> запускатися &mdash; кожній джобі потрібна ціль <code>runs-on:</code>, що вказує образ віртуальної машини, який GitHub має завантажити.</p>',
+    ],
+    hints: [
+      'Кожній джобі потрібен рядок <code>runs-on:</code> одразу під її назвою, з тим самим відступом, що й <code>steps:</code>.',
+      'Стандартний вибір &mdash; <code>runs-on: ubuntu-latest</code>: свіжа віртуальна машина з Ubuntu, яку GitHub безкоштовно надає для публічних репозиторіїв.',
+    ],
+    checks: [
+      'Джоба <code>build</code> має ціль <code>runs-on</code>',
+    ],
+  },
+  'm1': { title: 'Анатомія воркфлоу', blurb: 'Синтаксис YAML і скелет, спільний для кожного воркфлоу.' },
+  'm1-l1': {
+    title: 'Інтенсив із синтаксису YAML',
+    objective: 'Виправ зламаний файл, щоб він парсився, а тоді переконайся, що пайплайн під ним досі робить свою справу.',
+    intro: [
+      '<p>YAML чутливий до пробілів і безжальний рівно в одному: він ніколи не дозволяє табуляцію для відступів, лише пробіли. Один випадковий таб, невидимий у більшості редакторів, зламає весь воркфлоу ще до запуску першої джоби.</p>',
+      '<p>У файлі нижче саме цей баг. Редактор показує його як червонуватий проміжок, бо таб не вирівнюється так, як пробіли довкола, &mdash; от і твоя підказка.</p>',
+      '<p class="tip"><strong>Звичка сеньйора:</strong> налаштуй редактор так, щоб він показував пробільні символи й автоматично перетворював таби на пробіли. Це найпоширеніша причина, чому новенький воркфлоу падає із загадковою помилкою парсера на найпершому коміті.</p>',
+    ],
+    hints: [
+      'Помилка парсера називає номер рядка й стовпця &mdash; переходь одразу туди.',
+      'Видали весь відступ у рядку <code>runs-on:</code> і набери його заново лише пробілами, дотримуючись схеми з двох пробілів, як в іншій частині файлу.',
+    ],
+    checks: [
+      'Файл парситься як валідний YAML',
+      '<code>build</code> запускається на <code>ubuntu-latest</code>',
+      'Досі витягує код і запускає тести',
+    ],
+  },
+  'm1-l2': {
+    title: 'Анатомія workflow.yml',
+    objective: 'Збудуй чотири опори, потрібні кожному воркфлоу, з майже порожнього файлу.',
+    intro: [
+      '<p>Розбери будь-який файл GitHub Actions до скелета — і завжди знайдеш ті самі чотири частини: <code>name</code> (що показується у вкладці Actions), <code>on</code> (тригер), <code>jobs</code> (одна чи кілька одиниць роботи, кожна на власній віртуальній машині) і всередині кожної джоби <code>steps</code> (упорядкований список того, що ця машина фактично робить).</p>',
+      '<div class="ref-box"><div class="ref-title">Скелет</div><pre class="ref-code">name: &lt;string&gt;\non: &lt;event&gt;\njobs:\n  &lt;job-id&gt;:\n    runs-on: &lt;runner image&gt;\n    steps:\n      - run: &lt;shell command&gt;</pre></div>',
+      '<p>Заповни кожну прогалину нижче, щоб завершити свій перший воркфлоу з нуля.</p>',
+    ],
+    hints: [
+      '<code>on:</code> може бути коротким, як одне слово, напр. <code>on: push</code> &mdash; вкладений блок не потрібен.',
+      'Кроку run потрібна лише shell-команда після <code>run:</code>, наприклад <code>run: echo "hi"</code>.',
+    ],
+    checks: [
+      'Воркфлоу має <code>name</code>',
+      'Воркфлоу має тригер у <code>on</code>',
+      '<code>greet</code> має ціль <code>runs-on</code>',
+      '<code>greet</code> має крок, що виконує команду',
+    ],
+  },
+  'm2': { title: 'Тригери', blurb: 'Як точно вирішити, коли пайплайн має запускатися.' },
+  'm2-l1': {
+    title: 'Тригери push і pull request',
+    objective: 'Запускай CI на кожен пуш у main і на кожен пул-реквест, спрямований у main.',
+    intro: [
+      '<p>Зараз цей воркфлоу стежить не за тією гілкою і взагалі не реагує на пул-реквести &mdash; тож ніхто не бачить результатів, доки зміни вже не злиті. Спрямуй <code>push</code> на <code>main</code> і додай тригер <code>pull_request</code>, обмежений тією ж гілкою.</p>',
+      '<p class="tip">Спробуй перемикач сценаріїв праворуч до і після виправлення &mdash; він показує, чи запустив би цей самий файл хоч якийсь прогін для обраної симульованої події.</p>',
+    ],
+    hints: [
+      'Заміни <code>develop</code> на <code>main</code> у <code>push.branches</code>.',
+      'Додай сусідній до <code>push</code> ключ з тим самим відступом: <code>pull_request:</code> з власним <code>branches: [main]</code>.',
+    ],
+    checks: [
+      'Спрацьовує на пуш у <code>main</code>',
+      'Спрацьовує на пул-реквести в <code>main</code>',
+    ],
+    scenarios: {
+      'push-main': 'Пуш у main',
+      'push-feature': 'Пуш у фіча-гілку',
+      'pr-main': 'Пул-реквест у main',
+    },
+  },
+  'm2-l2': {
+    title: 'Запуски за розкладом і вручну',
+    objective: 'Додай нічний cron-розклад і дай людині змогу попередньо переглянути джобу через ручний вхідний параметр.',
+    intro: [
+      '<p>Не кожен пайплайн реагує на зміни коду. <code>schedule:</code> спрацьовує за cron-виразом (п’ять полів: хвилина, година, день місяця, місяць, день тижня, завжди в UTC); <code>workflow_dispatch:</code> додає кнопку &ldquo;Run workflow&rdquo; у вкладці Actions і може приймати типізовані <code>inputs</code>, щоб людина передала параметри під час запуску.</p>',
+      '<p class="tip"><strong>Звичка сеньйора:</strong> руйнівні чи дорогі джоби за розкладом майже завжди мають булевий вхідний параметр <code>dry_run</code> зі значенням <code>true</code> за замовчуванням, щоб людина могла оцінити масштаб наслідків, перш ніж справжній прогін піде без нагляду о 3-й ночі.</p>',
+    ],
+    hints: [
+      'Додай список <code>schedule:</code> під <code>on</code> з одним елементом, що містить рядок <code>cron:</code> &mdash; <code>\'0 3 * * *\'</code> означає щодня о 03:00 UTC.',
+      'Під <code>workflow_dispatch:</code> додай <code>inputs:</code>, а тоді вхідний параметр <code>dry_run</code> з <code>type: boolean</code> і <code>default: true</code>.',
+    ],
+    checks: [
+      'Має нічний cron-розклад',
+      'Ручний запуск приймає вхідний параметр <code>dry_run</code>',
+    ],
+    scenarios: {
+      'sched': 'Спрацьовує нічний розклад',
+      'manual': 'Хтось натискає «Run workflow»',
+      'push': 'Хтось пушить код',
+    },
+  },
+  'm2-l3': {
+    title: 'Вибір правильних типів активності',
+    objective: 'Перезапускай перевірки, коли чернетка PR стає готовою, і пропускай CI для змін лише в документації.',
+    intro: [
+      '<p><code>pull_request</code> насправді спрацьовує для багатьох різних <em>типів активності</em> &mdash; opened, synchronize (запушено нові коміти), reopened та інших. Якщо нічого не вказати, GitHub за замовчуванням бере лише <code>[opened, synchronize, reopened]</code>, і тихо пропускає момент, коли чернетку PR позначають готовою до рев’ю.</p>',
+      '<p>Тим часом <code>paths-ignore</code> (або його протилежність, <code>paths</code>) дає змогу пропустити весь прогін пайплайна, коли змінилися лише файли, які на нього не впливають, &mdash; класичний приклад — документація.</p>',
+    ],
+    hints: [
+      'Додай <code>types: [opened, synchronize, reopened, ready_for_review]</code> під <code>pull_request</code>, поруч із <code>branches</code>.',
+      'Додай список <code>paths-ignore</code> з glob-шаблонами на кшталт <code>\'**.md\'</code> і <code>\'docs/**\'</code>.',
+    ],
+    checks: [
+      'Повторно перевіряє чернетку PR, позначену готовою до рев’ю',
+      'Пропускає зміни лише в документації',
+    ],
+    scenarios: {
+      'opened': 'PR відкрито',
+      'ready': 'Чернетку позначено готовою до рев’ю',
+      'docs': 'PR змінює лише README.md',
+    },
+  },
+  'm3': { title: 'Джоби, кроки й раннери', blurb: 'Як розподілити роботу між однією чи багатьма віртуальними машинами.' },
+  'm3-l1': {
+    title: 'Паралельні джоби й runs-on',
+    objective: 'Розбий одну повільну послідовну джобу на дві незалежні, що виконуються одночасно.',
+    intro: [
+      '<p>Кожна <code>job</code> отримує власну свіжу віртуальну машину, і за замовчуванням джоби, не пов’язані між собою, виконуються <strong>паралельно</strong>, а не послідовно. Зараз lint і test запхані в одну джобу, тож тести без жодної причини чекають, доки завершиться лінт, &mdash; змарнований реальний час на кожному прогоні.</p>',
+    ],
+    hints: [
+      'Заміни єдину джобу <code>checks:</code> двома сусідніми джобами, <code>lint:</code> і <code>test:</code>, кожна з відступом безпосередньо під <code>jobs:</code>.',
+      'Кожній новій джобі потрібен власний <code>runs-on</code> і власний <code>actions/checkout@v4</code> &mdash; віртуальні машини не мають спільної файлової системи.',
+    ],
+    checks: [
+      'Існують окремі джоби <code>lint</code> і <code>test</code>',
+      'Обидві джоби мають раннер і залишаються незалежними',
+      'Lint досі лінтить, test досі тестує',
+    ],
+  },
+  'm3-l2': {
+    title: 'Послідовність через needs:',
+    objective: 'Зроби так, щоб deploy чекав на успішне завершення і lint, і test.',
+    intro: [
+      '<p>Паралельні джоби швидкі, але не кожна джоба має стартувати одразу &mdash; <code>needs:</code> оголошує залежність і каже GitHub Actions притримати джобу, доки потрібні їй джоби не завершаться успішно. Зараз <code>deploy</code> мчить уперед, не зважаючи на те, чи код узагалі проходить тести.</p>',
+      '<div class="ref-box"><div class="ref-title">Синтаксис</div><pre class="ref-code">deploy:\n  needs: [lint, test]</pre></div>',
+    ],
+    hints: [
+      'Додай <code>needs: [lint, test]</code> до джоби <code>deploy</code> з тим самим відступом, що і її <code>runs-on</code>.',
+    ],
+    checks: [
+      '<code>deploy</code> залежить і від <code>lint</code>, і від <code>test</code>',
+    ],
+  },
+  'm3-l3': {
+    title: 'Передача даних через виходи джоб',
+    objective: 'Відкрий обчислений рядок версії з build і використай його в deploy.',
+    intro: [
+      '<p>Джоби виконуються на окремих машинах, тож не можуть напряму ділитися змінними &mdash; але можуть свідомо передавати невеликі рядки через <strong>виходи (outputs)</strong>. Спершу крок записує значення в <code>$GITHUB_OUTPUT</code>; потім джоба повторно відкриває вихід цього кроку як один зі своїх <code>outputs</code>; і будь-яка джоба, що має її в <code>needs</code>, може прочитати <code>needs.&lt;job&gt;.outputs.&lt;name&gt;</code>.</p>',
+      '<div class="ref-box"><div class="ref-title">Ланцюжок</div><pre class="ref-code">steps.&lt;step-id&gt;.outputs.&lt;name&gt;  &rarr;  job.outputs.&lt;name&gt;  &rarr;  needs.&lt;job&gt;.outputs.&lt;name&gt;</pre></div>',
+    ],
+    hints: [
+      'Додай блок <code>outputs:</code> до <code>build</code> з тим самим відступом, що й <code>steps:</code>, і зістав <code>version</code> з <code>${{ steps.ver.outputs.value }}</code>.',
+      'У <code>deploy</code> передай версію в скрипт деплою: <code>run: ./deploy.sh ${{ needs.build.outputs.version }}</code>.',
+    ],
+    checks: [
+      '<code>build</code> відкриває обчислену версію',
+      '<code>deploy</code> зчитує її назад',
+    ],
+  },
+  'm4': { title: 'Використання екшнів', blurb: 'Маркетплейс, вхідні параметри with: і фіксація версій.' },
+  'm4-l1': {
+    title: 'Екшни з Marketplace',
+    objective: 'Склонуй репозиторій і встанови потрібну версію Node.js перед збіркою.',
+    intro: [
+      '<p><code>uses:</code> підтягує готовий крок, яким можна ділитися, з GitHub Marketplace замість того, щоб писати shell-команди вручну. Два екшни, які ти використовуватимеш майже в кожному воркфлоу: <code>actions/checkout</code>, що клонує твій репозиторій на раннер (без нього просто нема чого збирати!), і <code>actions/setup-node</code>, що встановлює конкретну версію Node.js через свої вхідні параметри <code>with:</code>.</p>',
+      '<p class="tip">Зараз ця джоба взагалі пропускає checkout &mdash; на диво поширена помилка новачків, адже повідомлення, яке вона спричиняє (&ldquo;no such file or directory&rdquo;), зовсім не очевидно вказує на відсутній крок checkout.</p>',
+    ],
+    hints: [
+      'Додай <code>- uses: actions/checkout@v4</code> найпершим кроком.',
+      'Далі додай <code>actions/setup-node@v4</code> з блоком <code>with: { node-version: \'20\' }</code> &mdash; перед кроком збірки.',
+    ],
+    checks: [
+      'Перший крок клонує репозиторій',
+      'Встановлює Node.js 20 перед збіркою',
+    ],
+  },
+  'm4-l2': {
+    title: 'Фіксація версій екшнів',
+    objective: 'Перестань стежити за «плаваючою» гілкою для кожного екшну &mdash; фіксуй релізні версії.',
+    intro: [
+      '<p>Посилання на екшн після <code>@</code> може вказувати на тег (<code>@v4</code>), гілку (<code>@main</code>) або SHA коміту. Посилання на гілку &mdash; це рухома ціль: мейнтейнер будь-коли може запушити туди новий, інший код, і твій пайплайн тихо почне запускати те, чого ти ніколи не переглядав.</p>',
+      '<p class="tip">Технічно теги теж можна пересунути, але на практиці поважні екшни вважають тег версії незмінним після публікації. Золотий стандарт &mdash; фіксація на конкретний SHA коміту &mdash; чекає на тебе в модулі про безпеку.</p>',
+    ],
+    hints: ['Заміни <code>@main</code> і <code>@master</code> на релізні теги версій, як-от <code>@v4</code> і <code>@v3</code>.'],
+    checks: [
+      'Жоден екшн більше не стежить за плаваючою гілкою',
+      'checkout зафіксовано на тезі версії',
+      'deploy-action зафіксовано на тезі версії',
+    ],
+  },
+  'm5': { title: 'Змінні, env і секрети', blurb: 'Вирази, змінні середовища і як ніколи не злити токен.' },
+  'm5-l1': {
+    title: 'Змінні середовища і вирази',
+    objective: 'Визнач URL API один раз і посилайся на нього всюди через вираз.',
+    intro: [
+      '<p><code>${{ }}</code> &mdash; це синтаксис виразів, який пронизує весь файл воркфлоу. Найпростіше застосування: визнач змінну один раз у <code>env:</code>, а потім читай її будь-де через <code>${{ env.NAME }}</code> &mdash; на рівні воркфлоу, джоби чи навіть окремого кроку.</p>',
+      '<p>Зараз той самий URL написано двічі. Якщо він колись зміниться, доведеться пам’ятати про два місця &mdash; або, що реалістичніше, про одне з них хтось забуде.</p>',
+    ],
+    hints: [
+      'Додай блок <code>env:</code> верхнього рівня з <code>API_URL: https://api.orbit.dev</code>.',
+      'Заміни обидва захардкоджені URL на <code>${{ env.API_URL }}</code>.',
+    ],
+    checks: [
+      '<code>API_URL</code> визначено один раз, у <code>env</code>',
+      'Обидва кроки посилаються на <code>${{ env.API_URL }}</code>',
+    ],
+  },
+  'm5-l2': {
+    title: 'Секрети і GITHUB_TOKEN',
+    objective: 'Заміни захардкоджений токен на посилання на секрет &mdash; поки він не витік.',
+    intro: [
+      '<p>Ніколи не пиши справжні облікові дані прямо у файл воркфлоу. Навіть у приватному репозиторії вони назавжди залишаться в історії git, видимі всім, хто має доступ на читання, і їх можна скопіювати в будь-який форк. Натомість збережи їх один раз як секрет репозиторію, а потім посилайся через <code>${{ secrets.NAME }}</code> &mdash; GitHub автоматично маскує значення всюди, де воно могло б з’явитися в лозі.</p>',
+      '<p class="tip">Вбудований push-protection від GitHub і більшість сканерів безпеки спеціально шукають шаблони на кшталт <code>ghp_</code> (personal access token), закомічені відкритим текстом &mdash; а саме це й ховається в кроці нижче.</p>',
+    ],
+    hints: ['Заміни літеральний рядок <code>ghp_&hellip;</code> на <code>${{ secrets.DEPLOY_TOKEN }}</code> &mdash; секрет уже існує в симульованих налаштуваннях репозиторію цієї лабораторної.'],
+    checks: [
+      'У файлі не лишилося захардкодженого токена',
+      'Натомість використовується <code>secrets.DEPLOY_TOKEN</code>',
+    ],
+  },
+  'm6': { title: 'Умови і вирази', blurb: 'Вчимо пайплайн реагувати на власний статус.' },
+  'm6-l1': {
+    title: 'if: і функції статусу джоби',
+    objective: 'Надсилай сповіщення про збій лише тоді, коли тести справді падають.',
+    intro: [
+      '<p><code>if:</code> вирішує, чи взагалі запуститься джоба (або окремий крок). У поєднанні з функціями статусу &mdash; <code>success()</code>, <code>failure()</code>, <code>cancelled()</code>, <code>always()</code> &mdash; це дозволяє пайплайну реагувати на власний результат: запускати крок лише після того, як щось вище по ланцюжку зламалося, або завжди прибирати за собою, хай що сталося.</p>',
+      '<div class="ref-box"><div class="ref-title">Типове значення, якого ти не бачиш</div><pre class="ref-code">if: success()   # implied on every job unless you write your own if:</pre></div>',
+    ],
+    hints: [
+      'Додай <code>needs: test</code> до <code>notify</code> &mdash; вона має залежати від <code>test</code>, щоб реагувати на її результат.',
+      'Додай <code>if: failure()</code> одразу під <code>needs:</code>.',
+    ],
+    checks: [
+      '<code>notify</code> залежить від <code>test</code>',
+      '<code>notify</code> запускається лише коли тести падають',
+    ],
+    scenarios: { 'pass': 'Тести проходять', 'fail': 'Тести падають' },
+  },
+  'm6-l2': {
+    title: 'Розгалуження логіки через вирази',
+    objective: 'Деплой лише при прямому пуші в main &mdash; ніколи з пул-реквесту чи іншої гілки.',
+    intro: [
+      '<p>Вирази можуть комбінувати значення контексту за допомогою <code>&amp;&amp;</code>, <code>||</code> і порівнянь. Джобі деплою майже завжди потрібно, щоб одночасно виконувалося кілька умов: правильна подія <em>і</em> правильна гілка.</p>',
+      '<div class="ref-box"><div class="ref-title">Корисний контекст</div><pre class="ref-code">github.event_name   # "push", "pull_request", "schedule", ...\ngithub.ref_name     # "main", "feature/login", ...</pre></div>',
+    ],
+    hints: ['Додай <code>if: github.event_name == \'push\' && github.ref_name == \'main\'</code> до джоби <code>deploy</code>.'],
+    checks: [
+      'Деплоїть при пуші в main',
+      'Пропускає пуш в іншу гілку',
+      'Повністю пропускає пул-реквести',
+    ],
+    scenarios: { 'push-main': 'Пуш у main', 'push-other': 'Пуш в іншу гілку', 'pr': 'Пул-реквест у main' },
+  },
+  'm7': { title: 'Матричні збірки', blurb: 'Тестуємо багато конфігурацій без копіпасти джоб.' },
+  'm7-l1': {
+    title: 'Основи матричного тестування',
+    objective: 'Тестуй на Node 16, 18 і 20 замість лише однієї версії.',
+    intro: [
+      '<p><code>strategy.matrix</code> перетворює одне визначення джоби на багато паралельних запусків &mdash; по одному на кожну комбінацію значень. Саме так ти перевіряєш «чи працює це на кожній версії Node, яку ми заявляємо як підтримувану», не пишучи ту саму джобу тричі.</p>',
+      '<div class="ref-box"><div class="ref-title">Як прочитати значення</div><pre class="ref-code">strategy:\n  matrix:\n    node: [16, 18, 20]\nsteps:\n  - uses: actions/setup-node@v4\n    with:\n      node-version: ${{ matrix.node }}</pre></div>',
+    ],
+    hints: [
+      'Додай блок <code>strategy: { matrix: { node: [16, 18, 20] } }</code> до джоби <code>test</code>.',
+      'Зміни <code>node-version</code> з літерала <code>\'18\'</code> на <code>${{ matrix.node }}</code>.',
+    ],
+    checks: [
+      'Матриця охоплює щонайменше 3 версії Node',
+      'setup-node бере версію з матриці',
+    ],
+  },
+  'm7-l2': {
+    title: 'include/exclude і fail-fast',
+    objective: 'Виключи завідомо зламану комбінацію і не дай одній нестабільній ОС приховати всі інші результати.',
+    intro: [
+      '<p>Матриця може перетинати кілька вимірів одночасно &mdash; <code>os</code> і <code>node</code> разом дають усі можливі комбінації, а їх швидко стає багато (тут 3 &times; 3 = 9 раннерів). <code>exclude</code> прибирає конкретні комбінації, які не мають сенсу (скажімо, нативна залежність, яка просто не збирається на старому Node під Windows).</p>',
+      '<p>Окремо: за замовчуванням <code>fail-fast</code> має значення <code>true</code>, тобто щойно <em>будь-яка</em> комбінація матриці падає, GitHub Actions скасовує всі інші ще запущені комбінації цієї матриці. Це чудово заощаджує ресурси, коли щось справді зламалося &mdash; і жахливо, коли ти намагаєшся з’ясувати, <em>які саме</em> комбінації падають, бо бачиш лише першу.</p>',
+    ],
+    hints: [
+      'Додай <code>exclude:</code> під <code>matrix</code> з одним елементом: <code>os: windows-latest</code> і <code>node: 16</code>.',
+      'Додай <code>fail-fast: false</code> одразу під <code>strategy</code>, на одному рівні з <code>matrix</code>.',
+    ],
+    checks: [
+      'Виключає зламану комбінацію Windows + Node 16',
+      'Одна нестабільна комбінація більше не приховує решту',
+    ],
+    scenarios: { 'flake': 'Node 18 провалює тести' },
+  },
+  'm8': { title: 'Кешування й артефакти', blurb: 'Прискорюємо запуски та передаємо результати збірки між джобами.' },
+  'm8-l1': {
+    title: 'Кешування залежностей',
+    objective: 'Закешуй node_modules, щоб кожен запуск не був холодним встановленням.',
+    intro: [
+      '<p><code>actions/cache</code> зберігає директорію між запусками за ключем, який визначаєш ти, &mdash; зазвичай це хеш lock-файлу, отриманий через функцію <code>hashFiles()</code>. Якщо lock-файл не змінився, наступний запуск відновить залежності прямо з кешу, а не завантажуватиме весь реєстр наново.</p>',
+      '<div class="ref-box"><div class="ref-title">Стандартний патерн</div><pre class="ref-code">- uses: actions/cache@v4\n  with:\n    path: node_modules\n    key: ${{ runner.os }}-modules-${{ hashFiles(\'**/package-lock.json\') }}</pre></div>',
+    ],
+    hints: ['Додай крок <code>actions/cache@v4</code> перед <code>npm ci</code>, який кешує <code>node_modules</code> із ключем на основі <code>hashFiles(\'**/package-lock.json\')</code>.'],
+    checks: [
+      'Кешує залежності перед встановленням',
+      'Ключ кешу базується на хеші lock-файлу',
+    ],
+  },
+  'm8-l2': {
+    title: 'Артефакти між джобами',
+    objective: 'Передай скомпільовану папку dist/ з build у deploy &mdash; вони працюють на різних машинах.',
+    intro: [
+      '<p>Кешування прискорює повторювану роботу в схожих запусках; <strong>артефакти</strong> переносять файли між <em>різними джобами в межах одного запуску</em>. <code>build</code> і <code>deploy</code> отримують кожна свою новеньку порожню віртуальну машину &mdash; усе, що скомпілювала <code>build</code>, для <code>deploy</code> просто не існує, доки його явно не завантажать і не скачають.</p>',
+    ],
+    hints: [
+      'У <code>build</code> додай після збірки крок <code>actions/upload-artifact@v4</code> з <code>name: dist</code> і <code>path: dist/</code>.',
+      'У <code>deploy</code> додай перед публікацією крок <code>actions/download-artifact@v4</code> з тим самим <code>name</code>.',
+    ],
+    checks: [
+      '<code>build</code> завантажує папку dist',
+      '<code>deploy</code> скачує її назад',
+    ],
+  },
+  'm9': { title: 'Повторне використання', blurb: 'Пишемо логіку CI один раз і викликаємо її звідусіль.' },
+  'm9-l1': {
+    title: 'Повторно використовувані воркфлоу',
+    objective: 'Перетвори одноразовий воркфлоу на бібліотеку, яку можуть викликати інші воркфлоу.',
+    intro: [
+      '<p><strong>Повторно використовуваний воркфлоу</strong> &mdash; це звичайний файл воркфлоу, тригером якого є <code>workflow_call</code> замість <code>push</code> чи <code>pull_request</code>. Інші воркфлоу можуть підключити його через <code>uses:</code> за шляхом &mdash; так само, як екшн із маркетплейсу, &mdash; і передати дані через оголошені <code>inputs</code>.</p>',
+      '<p>Це базовий прийом сеньйора, щоб не тримати п’ятнадцять майже однакових копій тієї самої логіки деплою, розкиданих по монорепозиторію, &mdash; напиши її один раз як повторно використовуваний воркфлоу і викликай із тонкого воркфлоу кожного сервісу.</p>',
+    ],
+    tip: 'Зі сторони виклику це виглядає так: <code>uses: ./.github/workflows/deploy-service.yml</code> з <code>with: { environment: production }</code> і, якщо потрібно, <code>secrets: inherit</code>.',
+    hints: ['Заміни тригер <code>push</code> на <code>workflow_call</code> і оголоси один обов’язковий вхідний параметр <code>environment</code> з <code>type: string</code>.'],
+    checks: [
+      'Запускається через <code>workflow_call</code>, а не прямим пушем',
+      'Оголошує обов’язковий вхідний параметр <code>environment</code>',
+    ],
+  },
+  'm9-l2': {
+    title: 'Композитні екшни',
+    objective: 'Виправ композитний екшн, щоб він справді вказував, у якій оболонці виконувати свої кроки.',
+    intro: [
+      '<p><strong>Композитний екшн</strong> пакує кілька звичайних кроків в один повторно використовуваний крок, описаний у власному <code>action.yml</code>, &mdash; зручно для короткої послідовності (на кшталт «checkout, встановлення й лінт»), яку хочеться вставляти в багато воркфлоу одним рядком. Його структура верхнього рівня відрізняється від файлу воркфлоу: <code>runs.using: composite</code>, а потім список <code>steps</code>.</p>',
+      '<p class="tip"><strong>Підступ:</strong> на відміну від кроку у звичайній джобі, кожен крок <code>run</code> у композитному екшні мусить сам оголосити <code>shell:</code> &mdash; GitHub Actions не підставить його за тебе, а пропуск &mdash; це жорстка помилка.</p>',
+    ],
+    hints: [
+      'Додай <code>using: composite</code> під <code>runs:</code>, над <code>steps:</code>.',
+      'Додай <code>shell: bash</code> до кожного кроку <code>run</code> &mdash; у композитному екшні це обов’язково, а не опційно.',
+    ],
+    checks: [
+      'Оголошено як композитний екшн',
+      'Кожен крок run вказує свою оболонку',
+    ],
+  },
+  'm10': { title: 'Середовища й шлюзи деплою', blurb: 'Ставимо людину або чергу між кодом і продакшеном.' },
+  'm10-l1': {
+    title: 'Середовища й ручне схвалення',
+    objective: 'Вимагай, щоб людина схвалила запуск, перш ніж ця джоба торкнеться продакшену.',
+    intro: [
+      '<p><code>environment:</code> прив’язує джобу до іменованого середовища (environment), налаштованого в параметрах репозиторію. Саме по собі це лише мітка &mdash; але щойно для середовища задано <strong>правило захисту</strong> (скажімо, обов’язкових рев’юерів), будь-яка джоба, що на нього націлена, ставиться на паузу й чекає, поки людина натисне Approve, хоч би як швидко працювала решта пайплайну.</p>',
+    ],
+    hints: ['Додай <code>environment: production</code> до джоби <code>deploy</code> з тим самим відступом, що й <code>runs-on</code>.'],
+    checks: [
+      '<code>deploy</code> націлена на середовище <code>production</code>',
+    ],
+    scenarios: { 'default': 'Пуш у main' },
+  },
+  'm10-l2': {
+    title: 'Керування конкурентністю',
+    objective: 'Не дай двом деплоям в одну гілку, що перекриваються, змагатися між собою.',
+    intro: [
+      '<p>Зроби два пуші поспіль &mdash; і за замовчуванням GitHub Actions радо запустить два повних незалежних запуски, які можуть завершитися не в тому порядку й залишити на продакшені старіший коміт, ніж той, який хтось щойно, як йому здається, викотив. <code>concurrency</code> групує запуски за ключем, який ти обираєш; якщо <code>cancel-in-progress</code> дорівнює true, новий запуск у тій самій групі скасовує все, що ще виконується.</p>',
+    ],
+    hints: ['Додай на верхньому рівні блок <code>concurrency:</code> з <code>group: ${{ github.workflow }}-${{ github.ref }}</code> і <code>cancel-in-progress: true</code>.'],
+    checks: [
+      'Групує запуски за воркфлоу та гілкою',
+      'Скасовує застарілі запуски',
+    ],
+    scenarios: { 'race': 'Посеред деплою приходить новіший пуш' },
+  },
+  'm11': { title: 'Контейнери й Docker', blurb: 'Збираємо образи та піднімаємо сервісні залежності.' },
+  'm11-l1': {
+    title: 'Збірка й публікація Docker-образу',
+    objective: 'Увійди в реєстр і справді опублікуй образ, який збираєш.',
+    intro: [
+      '<p>Зібрати образ на раннері &mdash; лише пів справи: якщо не запушити його в реєстр, образ зникне тієї ж миті, коли раннер знищать. Стандартна пара: <code>docker/login-action</code> автентифікується в реєстрі (тут це GitHub Container Registry, <code>ghcr.io</code>, з автоматичним <code>GITHUB_TOKEN</code>), а потім <code>docker/build-push-action</code> збирає <em>і</em> пушить образ одним кроком, коли <code>push: true</code>.</p>',
+    ],
+    hints: [
+      'Додай крок <code>docker/login-action@v3</code> з <code>registry: ghcr.io</code>, <code>username: ${{ github.actor }}</code> і <code>password: ${{ secrets.GITHUB_TOKEN }}</code>.',
+      'Заміни сиру команду <code>docker build</code> на <code>docker/build-push-action@v6</code>, задавши <code>push: true</code> і <code>tags:</code>, що вказує на <code>ghcr.io</code>.',
+    ],
+    checks: [
+      'Входить у GHCR',
+      'Справді пушить зібраний образ',
+    ],
+  },
+  'm11-l2': {
+    title: 'Сервісні контейнери для тестів',
+    objective: 'Дай набору інтеграційних тестів справжню базу даних.',
+    intro: [
+      '<p>Інтеграційним тестам, яким потрібна справжня база даних, на голому раннері її за замовчуванням ніхто не дасть. <code>services:</code> піднімає додатковий контейнер поруч із твоєю джобою &mdash; доступний через <code>localhost</code> на порту, який ти пробросиш, &mdash; рівно на час життя цієї джоби, а потім автоматично його прибирає.</p>',
+    ],
+    hints: ['Додай до джоби <code>test</code> блок <code>services:</code> із сервісом <code>postgres</code>, <code>image: postgres:16</code> і <code>ports: [5432:5432]</code>.'],
+    checks: [
+      'Запускає сервісний контейнер Postgres',
+      'Відкриває його на стандартному порту',
+    ],
+  },
+  'm12': { title: 'Деплой у хмару', blurb: 'Доступ до AWS та Azure без жодного довгоживучого ключа.' },
+  'm12-l1': {
+    title: 'Деплой в AWS через OIDC',
+    objective: 'Заміни захардкоджений ключ доступу AWS на короткоживучу роль, отриману через OIDC.',
+    intro: [
+      '<p>Довгоживучі ключі доступу AWS, збережені як секрети, &mdash; це постійний ризик: якщо вони колись витечуть, то працюватимуть, доки хтось не помітить і не відкличе їх вручну. OpenID Connect (OIDC) дозволяє GitHub Actions запитувати короткоживучий токен безпосередньо в AWS &mdash; обмежений однією джобою, дійсний кілька хвилин і без жодного збереженого ключа.</p>',
+      '<div class="ref-box"><div class="ref-title">Що для цього потрібно</div><pre class="ref-code">permissions:\n  id-token: write   # lets THIS job request an OIDC token\n\n- uses: aws-actions/configure-aws-credentials@v4\n  with:\n    role-to-assume: ${{ secrets.AWS_ROLE_ARN }}\n    aws-region: us-east-1</pre></div>',
+    ],
+    hints: [
+      'Додай <code>permissions: { id-token: write, contents: read }</code> до джоби <code>deploy</code>.',
+      'Заміни захардкоджені <code>aws-access-key-id</code> та <code>aws-secret-access-key</code> одним рядком <code>role-to-assume: ${{ secrets.AWS_ROLE_ARN }}</code>.',
+    ],
+    checks: [
+      'Не залишилося захардкодженого ключа доступу AWS',
+      'Джоба запитує OIDC-токен',
+      'Приймає роль замість статичних ключів',
+    ],
+  },
+  'm12-l2': {
+    title: 'Деплой в Azure через OIDC',
+    objective: 'Заміни захардкоджений client secret Azure на федеративний вхід без ключів.',
+    intro: [
+      '<p>В Azure аналогічний підхід використовує <code>azure/login</code> із трьома ідентифікаторами &mdash; <code>client-id</code>, <code>tenant-id</code>, <code>subscription-id</code> &mdash; і, якщо на боці Azure налаштовано федеративні облікові дані, жоден пароль чи client secret узагалі не мусить існувати як секрет у GitHub.</p>',
+    ],
+    hints: [
+      'Додай <code>permissions: { id-token: write, contents: read }</code> до джоби.',
+      'Заміни вхідний параметр <code>creds:</code> на <code>client-id</code>, <code>tenant-id</code> та <code>subscription-id</code>, кожен із яких читається із секрету.',
+    ],
+    checks: [
+      'Не залишилося захардкодженого client secret',
+      'Джоба запитує OIDC-токен',
+      'Вхід через федеративні ідентифікатори, а не пароль',
+    ],
+  },
+  'm13': { title: 'Монорепозиторії та масштабування', blurb: 'Як зберегти CI швидким і впорядкованим, коли репозиторій росте.' },
+  'm13-l1': {
+    title: 'Фільтри шляхів для монорепозиторіїв',
+    objective: 'Запускай цей пайплайн лише тоді, коли справді змінюється API-сервіс або спільний код, від якого він залежить.',
+    intro: [
+      '<p>У монорепозиторії з кількома сервісами воркфлоу, що запускається на кожен пуш &mdash; незалежно від того, який сервіс змінився, &mdash; марнує раннери на роботу, якої зміни ніяк не стосуються, і топить корисний сигнал у шумі. <code>paths:</code> обмежує тригер лише потрібними директоріями.</p>',
+    ],
+    hints: ['Додай список <code>paths:</code> під <code>push</code>, включивши і <code>\'services/api/**\'</code>, і <code>\'packages/shared/**\'</code>.'],
+    checks: [
+      'Обмежено API-сервісом',
+      'Досі реагує на зміни спільного пакета',
+    ],
+    scenarios: {
+      'api': 'Змінилися файли API',
+      'shared': 'Змінився спільний пакет',
+      'web': 'Змінився лише вебзастосунок',
+    },
+  },
+  'm13-l2': {
+    title: 'Організація воркфлоу на масштабі',
+    objective: 'Заміни три скопійовані джоби однією матрицею, яка викликає спільний воркфлоу для кожного сервісу.',
+    intro: [
+      '<p>Копіювати джобу для кожного сервісу можна, поки сервісів два. На десяти це перестає працювати. Підхід сеньйора: проганяй <code>matrix</code> по списку сервісів, а кожен елемент матриці нехай викликає один спільний повторно використовуваний воркфлоу, передаючи лише те, який сервіс він збирає.</p>',
+    ],
+    hints: [
+      'Згорни три джоби в одну, <code>ci:</code>, із <code>strategy.matrix.service: [api, web, worker]</code>.',
+      'Направ її на спільний файл через <code>uses: ./.github/workflows/service-ci.yml</code> і передай <code>with: { service: ${{ matrix.service }} }</code>.',
+    ],
+    checks: [
+      'Одна матриця керує всіма сервісами',
+      'Для кожного сервісу викликається один спільний воркфлоу',
+    ],
+  },
+  'm14': { title: 'Посилення безпеки', blurb: 'Звички, що відрізняють робочий пайплайн від безпечного.' },
+  'm14-l1': {
+    title: 'Дозволи за принципом мінімальних привілеїв',
+    objective: 'Обмеж токен за замовчуванням лише читанням, а потім надай більше прав тільки тій джобі, якій це потрібно.',
+    intro: [
+      '<p>Кожен запуск автоматично отримує <code>GITHUB_TOKEN</code>, права якого за замовчуванням визначаються налаштуваннями твоєї організації &mdash; а в багатьох репозиторіях це означає широкий доступ на читання <em>і запис</em> до всього репозиторію для кожної джоби, потрібен він їй чи ні. Явно задавши <code>permissions:</code> на початку файлу, ти перевизначаєш це значення до необхідного мінімуму, а окремі джоби все одно можуть запросити більше там, де їм це справді потрібно.</p>',
+    ],
+    hints: [
+      'Додай блок <code>permissions: { contents: read }</code> на верхньому рівні.',
+      'Саме для джоби <code>comment</code> додай власний <code>permissions: { pull-requests: write }</code> &mdash; дозволи на рівні джоби доповнюють базові, а не замінюють їх.',
+    ],
+    checks: [
+      'Токен за замовчуванням має доступ лише на читання',
+      '<code>comment</code> отримує лише ту додаткову область, яка їй потрібна',
+    ],
+  },
+  'm14-l2': {
+    title: 'Закріплення сторонніх екшнів за SHA',
+    objective: 'Закріпи сторонній екшн за точним комітом, а не за тегом, який автор може пересунути.',
+    intro: [
+      '<p>Тег версії &mdash; це вказівник, який акаунт автора може будь-коли перенаправити, &mdash; а в разі атаки на ланцюжок постачання це може зробити й зловмисник, що отримав доступ до цього акаунта. SHA коміту непомітно підмінити не вийде: він вказує на один точний, незмінний знімок коду, який виконуватиметься з секретами твого репозиторію.</p>',
+      '<p class="tip">Команди, які так роблять, усе одно залишають зрозумілий номер версії в коментарі в кінці рядка, щоб нікому не доводилося розшифровувати 40-символьний hex-рядок, аби дізнатися, що саме запускається.</p>',
+    ],
+    hints: ['Заміни <code>@v44</code> на <code>@a1b40a2d2b8513184d926b5e62e07cbee8c1c1a0</code> і додай після нього <code># v44.5.1</code> як зрозумілий коментар.'],
+    checks: [
+      'Закріплено за повним 40-символьним SHA коміту',
+    ],
+  },
+  'm14-l3': {
+    title: 'Як не вистрілити собі в ногу з pull_request_target',
+    objective: 'Припини запускати недовірений код із форків у контексті, що має доступ до секретів репозиторію.',
+    intro: [
+      '<p><code>pull_request_target</code> працює з дозволами та секретами <em>базового</em> репозиторію &mdash; на відміну від звичайного <code>pull_request</code>, який не має доступу до секретів, коли PR приходить із форку. Через це <code>pull_request_target</code> стає небезпечним щойно джоба ще й викачує та виконує код самого PR: зловмисний форк може надіслати PR, чий тестовий скрипт просто виведе назовні всі секрети, які бачить джоба.</p>',
+      '<p>Цій джобі насправді не потрібен жоден секрет &mdash; вона лише збирає і тестує. Рішення &mdash; запускати її на звичайному <code>pull_request</code>, де весь цей клас атак просто не діє.</p>',
+    ],
+    hints: ['Заміни <code>pull_request_target</code> на <code>pull_request</code> &mdash; більше нічого в цій джобі змінювати не треба.'],
+    checks: [
+      'Більше не використовує привілейований тригер',
+      'Натомість використовує безпечний тригер',
+    ],
+  },
+  'm15': { title: 'Фінальний проєкт', blurb: 'Усе, що ти вивчив, в одному пайплайні.' },
+  'm15-l1': {
+    title: 'Фінальний проєкт: випускай як сеньйор',
+    objective: 'Збери повний релізний пайплайн із порожнього файлу, виконавши кожну вимогу нижче.',
+    intro: [
+      '<p>Більше жодного «заповни пропуски» &mdash; перед тобою порожній файл і специфікація. Усе з попередніх п\'ятнадцяти модулів так чи інакше тут знадобиться. Проходь чекліст праворуч по одному пункту; він напряму відповідає вимогам нижче.</p>',
+      '<div class="ref-box"><div class="ref-title">Специфікація</div><ol class="spec-list">',
+      '<li>Запуск на пуш у <code>main</code>, а також можливість ручного запуску.</li>',
+      '<li>Обмеж токен за замовчуванням до <code>contents: read</code> на рівні воркфлоу.</li>',
+      '<li>Автоматично скасовуй застарілий запуск для тієї ж гілки.</li>',
+      '<li>Джоба <code>test</code>: checkout, матриця для Node 18 і 20, кешоване встановлення залежностей, потім lint і тести.</li>',
+      '<li>Джоба <code>build-image</code>, що залежить від <code>test</code>, логіниться та пушить Docker-образ у GHCR &mdash; але лише на <code>main</code>.</li>',
+      '<li>Джоба <code>deploy</code>, що залежить від <code>build-image</code>, захищена середовищем (environment) <code>production</code>, приймає роль AWS через OIDC без захардкоджених облікових даних &mdash; лише на <code>main</code>.</li>',
+      '</ol></div>',
+    ],
+    hints: [
+      'Будуй по одній вимозі, згори донизу &mdash; спершу <code>on</code>, <code>permissions</code> і <code>concurrency</code>, бо від них більше ніщо не залежить.',
+      'Кожна частина тут була окремим уроком раніше: тригери (M2), needs (M3), матриця+кеш (M7&ndash;M8), Docker (M11), середовища+OIDC (M10&amp;M12). Повернися до потрібного, якщо застряг на синтаксисі.',
+      'Не забудь <code>if:</code> і на <code>build-image</code>, і на <code>deploy</code> &mdash; без нього ручний запуск з іншої гілки, ніж main, однаково спробує щось випустити.',
+    ],
+    checks: [
+      'Запускається на пуш у main і вручну',
+      'Токен за замовчуванням обмежено лише читанням',
+      'Скасовує застарілі запуски для тієї ж гілки',
+      '<code>test</code> запускає матрицю Node з кешуванням',
+      '<code>test</code> викачує код, запускає lint і тести',
+      '<code>build-image</code> залежить від <code>test</code> і запускається лише на main',
+      '<code>build-image</code> пушить у GHCR',
+      '<code>deploy</code> залежить від <code>build-image</code> і захищений середовищем production',
+      '<code>deploy</code> використовує OIDC, а не статичні ключі AWS',
+    ],
+    scenarios: {
+      'main': 'Пуш у main',
+      'feature': 'Ручний запуск із feature-гілки',
+      'manual': 'Ручний запуск із main',
+    },
+  },
+};
+
+if (typeof module !== 'undefined') module.exports = { LESSONS_UK };
+
+
+// UI string catalog and language helpers. Lesson prose lives in lessons.js (English) and
+// lessons.uk.js (Ukrainian overlay); everything else the page says comes from STRINGS below.
+// Placeholders look like {name} and are filled from the params object passed to t().
+
+const LANGS = ['en', 'uk'];
+const LANG_KEY = 'pipelineAcademy.lang.v1';
+
+const STRINGS = {
+  en: {
+    'doc.title': 'Pipeline Academy',
+    'top.modules': '&#9776; Modules',
+    'top.langSwitch': 'УКР',
+    'top.langSwitchTitle': 'Перемкнути на українську',
+    'labNote': 'Pipeline Academy is a simulation: it parses real YAML and follows GitHub Actions\' real trigger, dependency, matrix, and expression rules, but no code actually runs and no repository is touched. Progress is saved in this browser only.',
+    'lesson.eyebrow': 'Module {mi} &middot; {module} &middot; Lesson {li}',
+    'lesson.mission': 'Mission',
+    'editor.hint': 'Hint',
+    'editor.anotherHint': 'Another hint',
+    'editor.noMoreHints': 'No more hints',
+    'editor.allHints': 'That\'s every hint for this one.',
+    'editor.reset': 'Reset',
+    'editor.resetConfirm': 'Click again to reset',
+    'editor.solution': 'Reveal solution',
+    'editor.solutionConfirm': 'Click again to reveal',
+    'editor.syntaxError': 'YAML syntax error: {msg}',
+    'editor.unparseable': 'The file could not be parsed.',
+    'run.pane': 'Simulate a run',
+    'run.button': '&#9654; Run pipeline',
+    'run.empty': 'Click Run to see what GitHub Actions would actually do with this file.',
+    'run.defaultScenario': 'Push to main',
+    'run.cantRun': 'Can\'t run — YAML syntax error.',
+    'run.noParse': 'The file does not parse.',
+    'run.didNotRun': 'Workflow did not run.',
+    'run.noGraph': 'Could not build the job graph.',
+    'run.noJobs': 'Workflow triggers, but defines no jobs yet.',
+    'run.noJobsHint': 'Add at least one job under <code>jobs:</code>.',
+    'run.then': '↓ then',
+    'run.success': '✓ Run completed successfully.',
+    'run.failure': '✗ Run failed.',
+    'run.cancelled': '⛔ Run cancelled.',
+    'run.allSkipped': '⏭ Every job was skipped.',
+    'run.superseded': '⚡ A newer commit landed on the same branch while this run was still going',
+    'run.supersededCancel': ' — cancelling the rest of this run.',
+    'run.supersededRace': ' — and because cancel-in-progress isn’t set, both runs are now racing.',
+    'run.logCancel': 'A newer run superseded this one. Cancelling remaining jobs.',
+    'run.logRace': 'Warning: a second run has started for the same ref. No cancellation configured.',
+    'run.approve': 'Approve',
+    'run.environment': 'Environment:',
+    'run.waiting': '⏸  Waiting for approval to deploy to {env}…',
+    'run.approved': '✓  Deployment to {env} approved',
+    'run.jobStart': '▶  Job: {job}',
+    'run.jobSkipped': '⏭  {job} skipped — {reason}',
+    'run.jobCancelled': '⛔  {job} cancelled',
+    'run.skipIf': 'if: {expr} evaluated to false.',
+    'run.skipNeeds': 'A required job did not succeed.',
+    'run.stepFailed': '{step} exited with a non-zero status.',
+    'status.queued': 'queued',
+    'status.running': 'running',
+    'status.success': 'success',
+    'status.failed': 'failed',
+    'status.skipped': 'skipped',
+    'status.cancelled': 'cancelled',
+    'status.approval': 'needs approval',
+    'check.title': 'Mission checklist',
+    'check.complete': 'Mission complete.',
+    'check.next': 'Next lesson →',
+    'check.finished': 'Mission complete — you’ve finished the whole curriculum.',
+    'trig.noTrigger': 'workflow has no "{name}" trigger configured',
+    'trig.branchIgnored': '{ref} matches branches-ignore',
+    'trig.branchNoMatch': '{ref} does not match branches filter',
+    'trig.tagIgnored': 'tag matches tags-ignore',
+    'trig.tagNoMatch': 'tag does not match tags filter',
+    'trig.pathsIgnored': 'all changed paths match paths-ignore',
+    'trig.pathsNoMatch': 'no changed path matches the paths filter',
+    'trig.pushMatch': 'push to {ref} matches configured filters',
+    'trig.typeNotListed': 'activity type "{action}" is not in types: [{types}]',
+    'trig.baseIgnored': 'base branch {ref} matches branches-ignore',
+    'trig.baseNoMatch': 'base branch {ref} does not match branches filter',
+    'trig.prMatch': '{name} ({action}) targeting {ref} matches configured filters',
+    'trig.schedule': 'scheduled trigger fired on cron',
+    'trig.dispatch': 'manually dispatched from the Actions tab',
+    'trig.call': 'invoked by a caller workflow',
+    'trig.other': '{name} event received',
+  },
+  uk: {
+    'doc.title': 'Pipeline Academy',
+    'top.modules': '&#9776; Модулі',
+    'top.langSwitch': 'ENG',
+    'top.langSwitchTitle': 'Switch to English',
+    'labNote': 'Pipeline Academy — це симуляція: вона по-справжньому розбирає YAML і дотримується реальних правил GitHub Actions щодо тригерів, залежностей, матриць і виразів, але жоден код насправді не виконується і жоден репозиторій не змінюється. Прогрес зберігається лише в цьому браузері.',
+    'lesson.eyebrow': 'Модуль {mi} &middot; {module} &middot; Урок {li}',
+    'lesson.mission': 'Місія',
+    'editor.hint': 'Підказка',
+    'editor.anotherHint': 'Ще підказка',
+    'editor.noMoreHints': 'Підказок більше немає',
+    'editor.allHints': 'Це всі підказки до цього уроку.',
+    'editor.reset': 'Скинути',
+    'editor.resetConfirm': 'Натисни ще раз, щоб скинути',
+    'editor.solution': 'Показати розв’язок',
+    'editor.solutionConfirm': 'Натисни ще раз, щоб показати',
+    'editor.syntaxError': 'Синтаксична помилка YAML: {msg}',
+    'editor.unparseable': 'Не вдалося розібрати файл.',
+    'run.pane': 'Симуляція запуску',
+    'run.button': '&#9654; Запустити пайплайн',
+    'run.empty': 'Натисни «Запустити», щоб побачити, що GitHub Actions насправді зробить із цим файлом.',
+    'run.defaultScenario': 'Пуш у main',
+    'run.cantRun': 'Запуск неможливий — синтаксична помилка YAML.',
+    'run.noParse': 'Файл не вдається розібрати.',
+    'run.didNotRun': 'Воркфлоу не запустився.',
+    'run.noGraph': 'Не вдалося побудувати граф джоб.',
+    'run.noJobs': 'Воркфлоу спрацьовує, але ще не має жодної джоби.',
+    'run.noJobsHint': 'Додай хоча б одну джобу в <code>jobs:</code>.',
+    'run.then': '↓ далі',
+    'run.success': '✓ Запуск успішно завершено.',
+    'run.failure': '✗ Запуск завершився помилкою.',
+    'run.cancelled': '⛔ Запуск скасовано.',
+    'run.allSkipped': '⏭ Усі джоби пропущено.',
+    'run.superseded': '⚡ Поки цей запуск ще тривав, у ту саму гілку прилетів новіший коміт',
+    'run.supersededCancel': ' — решту цього запуску скасовано.',
+    'run.supersededRace': ' — і оскільки cancel-in-progress не задано, тепер обидва запуски змагаються між собою.',
+    'run.logCancel': 'Новіший запуск витіснив цей. Скасовуємо решту джоб.',
+    'run.logRace': 'Попередження: для того самого ref стартував другий запуск. Скасування не налаштовано.',
+    'run.approve': 'Схвалити',
+    'run.environment': 'Середовище:',
+    'run.waiting': '⏸  Очікуємо схвалення деплою в {env}…',
+    'run.approved': '✓  Деплой у {env} схвалено',
+    'run.jobStart': '▶  Джоба: {job}',
+    'run.jobSkipped': '⏭  {job} пропущено — {reason}',
+    'run.jobCancelled': '⛔  {job} скасовано',
+    'run.skipIf': 'if: {expr} дав false.',
+    'run.skipNeeds': 'Одна з обов’язкових джоб не завершилася успішно.',
+    'run.stepFailed': '{step} завершився з ненульовим кодом.',
+    'status.queued': 'у черзі',
+    'status.running': 'виконується',
+    'status.success': 'успіх',
+    'status.failed': 'помилка',
+    'status.skipped': 'пропущено',
+    'status.cancelled': 'скасовано',
+    'status.approval': 'потрібне схвалення',
+    'check.title': 'Чекліст місії',
+    'check.complete': 'Місію виконано.',
+    'check.next': 'Наступний урок →',
+    'check.finished': 'Місію виконано — ти пройшов увесь курс.',
+    'trig.noTrigger': 'у воркфлоу не налаштовано тригер "{name}"',
+    'trig.branchIgnored': '{ref} збігається з branches-ignore',
+    'trig.branchNoMatch': '{ref} не відповідає фільтру branches',
+    'trig.tagIgnored': 'тег збігається з tags-ignore',
+    'trig.tagNoMatch': 'тег не відповідає фільтру tags',
+    'trig.pathsIgnored': 'усі змінені шляхи збігаються з paths-ignore',
+    'trig.pathsNoMatch': 'жоден змінений шлях не відповідає фільтру paths',
+    'trig.pushMatch': 'пуш у {ref} відповідає налаштованим фільтрам',
+    'trig.typeNotListed': 'тип активності "{action}" відсутній у types: [{types}]',
+    'trig.baseIgnored': 'базова гілка {ref} збігається з branches-ignore',
+    'trig.baseNoMatch': 'базова гілка {ref} не відповідає фільтру branches',
+    'trig.prMatch': '{name} ({action}) у {ref} відповідає налаштованим фільтрам',
+    'trig.schedule': 'тригер за розкладом спрацював за cron',
+    'trig.dispatch': 'запущено вручну з вкладки Actions',
+    'trig.call': 'викликано іншим воркфлоу',
+    'trig.other': 'отримано подію {name}',
+  },
+};
+
+function detectLang() {
+  let saved = null;
+  try { saved = localStorage.getItem(LANG_KEY); } catch (e) {}
+  if (LANGS.indexOf(saved) !== -1) return saved;
+  const nav = (typeof navigator !== 'undefined' && (navigator.languages || [navigator.language])) || [];
+  for (let i = 0; i < nav.length; i++) if (/^uk\b/i.test(nav[i] || '')) return 'uk';
+  return 'en';
+}
+
+let currentLang = 'en';
+
+function setLang(lang) {
+  if (LANGS.indexOf(lang) === -1) lang = 'en';
+  currentLang = lang;
+  try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
+  if (typeof document !== 'undefined') document.documentElement.lang = lang;
+}
+
+function getLang() { return currentLang; }
+
+function t(key, params) {
+  const table = STRINGS[currentLang] || STRINGS.en;
+  let s = table[key] != null ? table[key] : (STRINGS.en[key] != null ? STRINGS.en[key] : key);
+  if (params) s = s.replace(/\{(\w+)\}/g, (m, k) => (params[k] != null ? String(params[k]) : m));
+  return s;
+}
+
+// Returns a lesson/module field in the current language, falling back to English. `index` picks
+// one entry out of an array field (hints, checks); for `scenarios` it is the scenario id.
+function localized(item, field, index) {
+  const en = item[field];
+  const ov = currentLang === 'uk' && typeof LESSONS_UK !== 'undefined' ? LESSONS_UK[item.id] : null;
+  if (field === 'checks') {
+    const v = ov && ov.checks && ov.checks[index];
+    return v != null ? v : en[index].label;
+  }
+  if (field === 'scenarios') {
+    const v = ov && ov.scenarios && ov.scenarios[index];
+    return v != null ? v : null;
+  }
+  let v = ov ? ov[field] : null;
+  if (index != null) { v = v && v[index]; return v != null ? v : en[index]; }
+  if (Array.isArray(v)) v = v.join('\n');
+  return v != null ? v : en;
+}
+
+if (typeof module !== 'undefined') module.exports = { STRINGS, LANGS, t, setLang, getLang, localized };
+
+
 (function () {
   'use strict';
 
@@ -2668,7 +3451,7 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
         var idx = steps.length - 1;
         var last = steps[idx] || {};
         var label = last.name || (last.run ? String(last.run).split('\n')[0] : 'step');
-        return { stepIndex: idx, message: label + ' exited with a non-zero status.' };
+        return { stepIndex: idx, message: t('run.stepFailed', { step: label }) };
       }
       if (ov.forceFailMatrix && ov.forceFailMatrix.jobKey === jobKey && matrixVals) {
         var match = ov.forceFailMatrix.match;
@@ -2741,16 +3524,39 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
     return (lesson.scenarios && lesson.scenarios.length) ? lesson.scenarios : [{ id: 'default', label: 'Push to main', event: { name: 'push', refName: 'main' } }];
   }
 
+  function scenarioLabel(lesson, s) {
+    if (!lesson.scenarios || !lesson.scenarios.length) return t('run.defaultScenario');
+    return localized(lesson, 'scenarios', s.id) || s.label;
+  }
+
+  function triggerReason(trig) { return trig.code ? t('trig.' + trig.code, trig.params) : trig.reason; }
+
+  /* ---------------- Static page chrome ---------------- */
+  var langBtn = document.getElementById('langToggle');
+  function renderChrome() {
+    document.title = t('doc.title');
+    document.getElementById('sidebarToggle').innerHTML = t('top.modules');
+    document.getElementById('labNote').textContent = t('labNote');
+    langBtn.textContent = t('top.langSwitch');
+    langBtn.title = t('top.langSwitchTitle');
+  }
+  langBtn.addEventListener('click', function () {
+    setLang(getLang() === 'uk' ? 'en' : 'uk');
+    runToken++;
+    renderChrome();
+    renderLesson(currentId);
+  });
+
   /* ---------------- Sidebar ---------------- */
   function renderSidebar() {
     var html = '';
     MODULES.forEach(function (m, mi) {
-      html += '<div class="module-group"><div class="module-head"><span class="module-num">' + (mi) + '</span><span>' + escapeHtml(m.title) + '</span></div>';
+      html += '<div class="module-group"><div class="module-head"><span class="module-num">' + (mi) + '</span><span>' + escapeHtml(localized(m, 'title')) + '</span></div>';
       m.lessons.forEach(function (l) {
         var done = progress.has(l.id);
         var active = l.id === currentId;
         html += '<button type="button" class="lesson-link' + (done ? ' done' : '') + (active ? ' active' : '') + '" data-lesson="' + l.id + '">' +
-          '<span class="dot">' + (done ? '✓' : '') + '</span><span class="label">' + escapeHtml(l.title) + '</span></button>';
+          '<span class="dot">' + (done ? '✓' : '') + '</span><span class="label">' + escapeHtml(localized(l, 'title')) + '</span></button>';
       });
       html += '</div>';
     });
@@ -2783,22 +3589,22 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
     safeSet(LAST_KEY, id);
     try { history.replaceState(null, '', '#' + id); } catch (e) {}
 
-    var tipHtml = lesson.tip ? '<p class="tip">' + lesson.tip + '</p>' : '';
+    var tipHtml = lesson.tip ? '<p class="tip">' + localized(lesson, 'tip') + '</p>' : '';
     var scenarioChips = scenarios.map(function (s, i) {
-      return '<button type="button" class="chip' + (i === 0 ? ' active' : '') + '" data-scenario="' + s.id + '">' + escapeHtml(s.label) + '</button>';
+      return '<button type="button" class="chip' + (i === 0 ? ' active' : '') + '" data-scenario="' + s.id + '">' + escapeHtml(scenarioLabel(lesson, s)) + '</button>';
     }).join('');
 
     mainEl.innerHTML =
-      '<div class="lesson-eyebrow">Module ' + entry.mi + ' &middot; ' + escapeHtml(mod.title) + ' &middot; Lesson ' + (entry.li + 1) + '</div>' +
-      '<h1 class="lesson-title">' + escapeHtml(lesson.title) + '</h1>' +
-      '<div class="mission-banner"><span class="mission-label">Mission</span><span class="mission-text">' + escapeHtml(lesson.objective) + '</span></div>' +
-      '<div class="lesson-intro">' + lesson.intro + tipHtml + '</div>' +
+      '<div class="lesson-eyebrow">' + t('lesson.eyebrow', { mi: entry.mi, module: escapeHtml(localized(mod, 'title')), li: entry.li + 1 }) + '</div>' +
+      '<h1 class="lesson-title">' + escapeHtml(localized(lesson, 'title')) + '</h1>' +
+      '<div class="mission-banner"><span class="mission-label">' + t('lesson.mission') + '</span><span class="mission-text">' + escapeHtml(localized(lesson, 'objective')) + '</span></div>' +
+      '<div class="lesson-intro">' + localized(lesson, 'intro') + tipHtml + '</div>' +
       '<div class="workbench">' +
         '<div class="pane editor-pane">' +
           '<div class="pane-header"><span>workflow.yml</span><div class="editor-actions">' +
-            '<button class="btn btn-ghost btn-sm" id="hintBtn" type="button">Hint</button>' +
-            '<button class="btn btn-ghost btn-sm" id="resetBtn" type="button">Reset</button>' +
-            '<button class="btn btn-ghost btn-sm" id="solutionBtn" type="button">Reveal solution</button>' +
+            '<button class="btn btn-ghost btn-sm" id="hintBtn" type="button">' + t('editor.hint') + '</button>' +
+            '<button class="btn btn-ghost btn-sm" id="resetBtn" type="button">' + t('editor.reset') + '</button>' +
+            '<button class="btn btn-ghost btn-sm" id="solutionBtn" type="button">' + t('editor.solution') + '</button>' +
           '</div></div>' +
           '<div class="editor-wrap">' +
             '<div class="editor-gutter" id="editorGutter"></div>' +
@@ -2811,18 +3617,18 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
           '<div class="hint-box" id="hintBox" hidden></div>' +
         '</div>' +
         '<div class="pane run-pane">' +
-          '<div class="pane-header"><span>Simulate a run</span></div>' +
+          '<div class="pane-header"><span>' + t('run.pane') + '</span></div>' +
           '<div class="run-pane-body">' +
             (scenarios.length > 1 ? '<div class="scenario-row" id="scenarioRow">' + scenarioChips + '</div>' : '') +
-            '<button class="btn btn-accent btn-run" id="runBtn" type="button">&#9654; Run pipeline</button>' +
-            '<div class="run-output" id="runOutput"><div class="run-empty">Click Run to see what GitHub Actions would actually do with this file.</div></div>' +
+            '<button class="btn btn-accent btn-run" id="runBtn" type="button">' + t('run.button') + '</button>' +
+            '<div class="run-output" id="runOutput"><div class="run-empty">' + t('run.empty') + '</div></div>' +
           '</div>' +
         '</div>' +
       '</div>' +
       '<div class="checklist-panel">' +
-        '<div class="pane-header"><span>Mission checklist</span><span class="checklist-count" id="checklistCount"></span></div>' +
+        '<div class="pane-header"><span>' + t('check.title') + '</span><span class="checklist-count" id="checklistCount"></span></div>' +
         '<ul class="checklist" id="checklist"></ul>' +
-        '<div class="lesson-complete" id="lessonComplete" hidden><span class="lesson-complete-text">Mission complete.</span><button class="btn btn-accent" id="nextBtn" type="button">Next lesson &rarr;</button></div>' +
+        '<div class="lesson-complete" id="lessonComplete" hidden><span class="lesson-complete-text">' + t('check.complete') + '</span><button class="btn btn-accent" id="nextBtn" type="button">' + t('check.next') + '</button></div>' +
       '</div>';
 
     mainEl.scrollTop = 0; window.scrollTo(0, 0);
@@ -2904,15 +3710,15 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
     var api = buildApi(input.value);
     var errorStrip = document.getElementById('errorStrip');
     if (!api.parses) {
-      var msg = api.parseError && api.parseError.message ? api.parseError.message.split('\n')[0] : 'The file could not be parsed.';
-      errorStrip.innerHTML = '<span>&#9888;</span><span>YAML syntax error: ' + escapeHtml(msg) + '</span>';
+      var msg = api.parseError && api.parseError.message ? api.parseError.message.split('\n')[0] : t('editor.unparseable');
+      errorStrip.innerHTML = '<span>&#9888;</span><span>' + t('editor.syntaxError', { msg: escapeHtml(msg) }) + '</span>';
     } else {
       errorStrip.innerHTML = '';
     }
-    var results = lesson.checks.map(function (c) {
+    var results = lesson.checks.map(function (c, i) {
       var pass = false;
       try { pass = !!c.test(api); } catch (e) { pass = false; }
-      return { label: c.label, pass: pass };
+      return { label: localized(lesson, 'checks', i), pass: pass };
     });
     var listEl = document.getElementById('checklist');
     listEl.innerHTML = results.map(function (r) {
@@ -2936,11 +3742,11 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
       var next = ALL[idx + 1];
       if (next) {
         nextBtn.hidden = false;
-        nextBtn.textContent = 'Next lesson →';
+        nextBtn.textContent = t('check.next');
         nextBtn.onclick = function () { navigate(next.lesson.id); };
       } else {
         nextBtn.hidden = true;
-        completeBox.querySelector('.lesson-complete-text').textContent = 'Mission complete — you’ve finished the whole curriculum.';
+        completeBox.querySelector('.lesson-complete-text').textContent = t('check.finished');
       }
     } else {
       completeBox.hidden = true;
@@ -2955,17 +3761,17 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
       if (!lesson.hints || !lesson.hints.length) return;
       if (hintsRevealed < lesson.hints.length) hintsRevealed++;
       hintBox.hidden = false;
-      hintBox.innerHTML = '<ol>' + lesson.hints.slice(0, hintsRevealed).map(function (h) { return '<li>' + h + '</li>'; }).join('') + '</ol>' +
-        (hintsRevealed < lesson.hints.length ? '' : '<div style="color:var(--muted);font-size:12px;">That\'s every hint for this one.</div>');
-      hintBtn.textContent = hintsRevealed < lesson.hints.length ? 'Another hint' : 'No more hints';
+      hintBox.innerHTML = '<ol>' + lesson.hints.slice(0, hintsRevealed).map(function (h, i) { return '<li>' + localized(lesson, 'hints', i) + '</li>'; }).join('') + '</ol>' +
+        (hintsRevealed < lesson.hints.length ? '' : '<div style="color:var(--muted);font-size:12px;">' + t('editor.allHints') + '</div>');
+      hintBtn.textContent = hintsRevealed < lesson.hints.length ? t('editor.anotherHint') : t('editor.noMoreHints');
     });
 
     var resetBtn = document.getElementById('resetBtn');
     resetBtn.addEventListener('click', function () {
       if (!resetArmed) {
         resetArmed = true;
-        resetBtn.textContent = 'Click again to reset';
-        setTimeout(function () { resetArmed = false; resetBtn.textContent = 'Reset'; }, 3000);
+        resetBtn.textContent = t('editor.resetConfirm');
+        setTimeout(function () { resetArmed = false; resetBtn.textContent = t('editor.reset'); }, 3000);
         return;
       }
       var input = document.getElementById('editorInput');
@@ -2974,15 +3780,15 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
       syncEditorVisuals();
       resetEditorScroll();
       runChecklist();
-      resetArmed = false; resetBtn.textContent = 'Reset';
+      resetArmed = false; resetBtn.textContent = t('editor.reset');
     });
 
     var solutionBtn = document.getElementById('solutionBtn');
     solutionBtn.addEventListener('click', function () {
       if (!solutionArmed) {
         solutionArmed = true;
-        solutionBtn.textContent = 'Click again to reveal';
-        setTimeout(function () { solutionArmed = false; solutionBtn.textContent = 'Reveal solution'; }, 3000);
+        solutionBtn.textContent = t('editor.solutionConfirm');
+        setTimeout(function () { solutionArmed = false; solutionBtn.textContent = t('editor.solution'); }, 3000);
         return;
       }
       var input = document.getElementById('editorInput');
@@ -2991,7 +3797,7 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
       syncEditorVisuals();
       resetEditorScroll();
       runChecklist();
-      solutionArmed = false; solutionBtn.textContent = 'Reveal solution';
+      solutionArmed = false; solutionBtn.textContent = t('editor.solution');
     });
 
     document.getElementById('runBtn').addEventListener('click', function () { doRun(lesson); });
@@ -3023,7 +3829,7 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
       return '<li data-step="1" class="pending"><span class="mk">' + stepGlyph('pending') + '</span><span class="t">' + escapeHtml(s.name) + '</span></li>';
     }).join('');
     return '<div class="dag-node" data-status="pending" data-node="' + node.id + '">' +
-      '<div class="dag-node-head"><span class="dag-node-name">' + escapeHtml(node.label) + '</span><span class="status-pill pending">queued</span></div>' +
+      '<div class="dag-node-head"><span class="dag-node-name">' + escapeHtml(node.label) + '</span><span class="status-pill pending">' + t('status.queued') + '</span></div>' +
       (node.matrixLabel ? '<div class="dag-node-matrix">' + escapeHtml(node.matrixLabel) + '</div>' : '') +
       '<ul class="step-list">' + stepsHtml + '</ul>' +
       '<div class="approve-slot"></div>' +
@@ -3036,7 +3842,7 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
     var levelKeys = Object.keys(byLevel).map(Number).sort(function (a, b) { return a - b; });
     var html = '<div class="dag" id="dagRoot"><div id="dagBanner"></div>';
     levelKeys.forEach(function (lvl, i) {
-      if (i > 0) html += '<div class="dag-arrow">↓ then</div>';
+      if (i > 0) html += '<div class="dag-arrow">' + t('run.then') + '</div>';
       html += '<div class="dag-level">' + byLevel[lvl].map(renderNodeSkeleton).join('') + '</div>';
     });
     html += '</div><div class="console" id="consoleEl"></div>';
@@ -3061,8 +3867,8 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
   }
 
   function skipReason(node) {
-    if (node.ifExpr) return 'if: ' + node.ifExpr + ' evaluated to false.';
-    return 'A required job did not succeed.';
+    if (node.ifExpr) return t('run.skipIf', { expr: node.ifExpr });
+    return t('run.skipNeeds');
   }
 
   async function animateNode(outputEl, consoleEl, node, scenario, myToken) {
@@ -3071,20 +3877,20 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
     if (!el) return;
 
     if (node.status === 'skipped') {
-      setNodeStatus(outputEl, node, 'skipped', 'skipped');
+      setNodeStatus(outputEl, node, 'skipped', t('status.skipped'));
       el.querySelectorAll('.step-list li').forEach(function (li) { li.className = 'skipped'; li.querySelector('.mk').textContent = stepGlyph('skipped'); });
-      appendLog(consoleEl, '⏭  ' + node.label + ' skipped — ' + skipReason(node), 'dim');
+      appendLog(consoleEl, t('run.jobSkipped', { job: node.label, reason: skipReason(node) }), 'dim');
       return;
     }
     if (node.status === 'cancelled') {
-      setNodeStatus(outputEl, node, 'cancelled', 'cancelled');
+      setNodeStatus(outputEl, node, 'cancelled', t('status.cancelled'));
       el.querySelectorAll('.step-list li').forEach(function (li) { li.className = 'skipped'; li.querySelector('.mk').textContent = stepGlyph('skipped'); });
-      appendLog(consoleEl, '⛔  ' + node.label + ' cancelled', 'dim');
+      appendLog(consoleEl, t('run.jobCancelled', { job: node.label }), 'dim');
       return;
     }
 
-    setNodeStatus(outputEl, node, 'running', 'running');
-    appendLog(consoleEl, '▶  Job: ' + node.label + (node.matrixLabel ? ' (' + node.matrixLabel + ')' : ''), 'sys');
+    setNodeStatus(outputEl, node, 'running', t('status.running'));
+    appendLog(consoleEl, t('run.jobStart', { job: node.label + (node.matrixLabel ? ' (' + node.matrixLabel + ')' : '') }), 'sys');
 
     var stepLis = el.querySelectorAll('.step-list li');
     var failed = false;
@@ -3108,21 +3914,21 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
       }
     }
 
-    if (failed) { setNodeStatus(outputEl, node, 'failure', 'failed'); return; }
+    if (failed) { setNodeStatus(outputEl, node, 'failure', t('status.failed')); return; }
 
     if (node.environment && scenario.overrides && scenario.overrides.protectedEnvironments && scenario.overrides.protectedEnvironments.indexOf(node.environment) !== -1) {
-      setNodeStatus(outputEl, node, 'waiting', 'needs approval');
-      appendLog(consoleEl, '⏸  Waiting for approval to deploy to ' + node.environment + '…', 'sys');
+      setNodeStatus(outputEl, node, 'waiting', t('status.approval'));
+      appendLog(consoleEl, t('run.waiting', { env: node.environment }), 'sys');
       var slot = el.querySelector('.approve-slot');
-      slot.innerHTML = '<div class="approve-row"><span>Environment: <strong>' + escapeHtml(node.environment) + '</strong></span><button class="btn btn-accent btn-sm" type="button">Approve</button></div>';
+      slot.innerHTML = '<div class="approve-row"><span>' + t('run.environment') + ' <strong>' + escapeHtml(node.environment) + '</strong></span><button class="btn btn-accent btn-sm" type="button">' + t('run.approve') + '</button></div>';
       await new Promise(function (resolve) {
         slot.querySelector('button').addEventListener('click', function () { slot.innerHTML = ''; resolve(); }, { once: true });
       });
       if (runToken !== myToken) return;
-      appendLog(consoleEl, '✓  Deployment to ' + node.environment + ' approved', 'sys');
+      appendLog(consoleEl, t('run.approved', { env: node.environment }), 'sys');
     }
 
-    setNodeStatus(outputEl, node, 'success', 'success');
+    setNodeStatus(outputEl, node, 'success', t('status.success'));
   }
 
   function canned(step) {
@@ -3149,8 +3955,8 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
     var myToken = ++runToken;
 
     if (!api.parses) {
-      var msg = api.parseError && api.parseError.message ? api.parseError.message : 'The file does not parse.';
-      outputEl.innerHTML = '<div class="trigger-skip"><strong>Can\'t run — YAML syntax error.</strong>' + escapeHtml(msg.split('\n')[0]) + '</div>';
+      var msg = api.parseError && api.parseError.message ? api.parseError.message : t('run.noParse');
+      outputEl.innerHTML = '<div class="trigger-skip"><strong>' + t('run.cantRun') + '</strong>' + escapeHtml(msg.split('\n')[0]) + '</div>';
       return;
     }
 
@@ -3159,23 +3965,23 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
     var event = scenario.event || { name: 'push', refName: 'main' };
     var trig = evaluateTrigger(api.parsed.on, event);
     if (!trig.fires) {
-      outputEl.innerHTML = '<div class="trigger-skip"><strong>Workflow did not run.</strong>' + escapeHtml(trig.reason) + '</div>';
+      outputEl.innerHTML = '<div class="trigger-skip"><strong>' + t('run.didNotRun') + '</strong>' + escapeHtml(triggerReason(trig)) + '</div>';
       return;
     }
 
     var ctx = buildContext(api.parsed, event);
     var plan;
     try { plan = planRun(api.parsed, ctx, genericFaultHook(scenario)); }
-    catch (e) { outputEl.innerHTML = '<div class="trigger-skip"><strong>Could not build the job graph.</strong>' + escapeHtml(e.message) + '</div>'; return; }
+    catch (e) { outputEl.innerHTML = '<div class="trigger-skip"><strong>' + t('run.noGraph') + '</strong>' + escapeHtml(e.message) + '</div>'; return; }
 
     if (plan.nodes.length === 0) {
-      outputEl.innerHTML = '<div class="trigger-skip"><strong>Workflow triggers, but defines no jobs yet.</strong>Add at least one job under <code>jobs:</code>.</div>';
+      outputEl.innerHTML = '<div class="trigger-skip"><strong>' + t('run.noJobs') + '</strong>' + t('run.noJobsHint') + '</div>';
       return;
     }
 
     outputEl.innerHTML = renderDagSkeleton(plan);
     var consoleEl = document.getElementById('consoleEl');
-    appendLog(consoleEl, '# ' + trig.reason, 'sys');
+    appendLog(consoleEl, '# ' + triggerReason(trig), 'sys');
 
     var byLevel = {};
     plan.nodes.forEach(function (n) { (byLevel[n.level] = byLevel[n.level] || []).push(n); });
@@ -3190,10 +3996,10 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
         supersededCancel = cancelInProgress;
         var banner = document.getElementById('dagBanner');
         if (banner) {
-          banner.innerHTML = '<div class="run-banner skip" style="margin-bottom:10px;">⚡ A newer commit landed on the same branch while this run was still going' +
-            (cancelInProgress ? ' — cancelling the rest of this run.' : ' — and because cancel-in-progress isn’t set, both runs are now racing.') + '</div>';
+          banner.innerHTML = '<div class="run-banner skip" style="margin-bottom:10px;">' + t('run.superseded') +
+            (cancelInProgress ? t('run.supersededCancel') : t('run.supersededRace')) + '</div>';
         }
-        appendLog(consoleEl, cancelInProgress ? 'A newer run superseded this one. Cancelling remaining jobs.' : 'Warning: a second run has started for the same ref. No cancellation configured.', 'sys');
+        appendLog(consoleEl, cancelInProgress ? t('run.logCancel') : t('run.logRace'), 'sys');
       }, 1300);
     }
 
@@ -3217,7 +4023,7 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
       : finalStatuses.every(function (s) { return s === 'skipped'; }) ? 'skip'
       : 'success';
     var banner = document.getElementById('dagBanner');
-    var bannerText = overall === 'success' ? '✓ Run completed successfully.' : overall === 'failure' ? '✗ Run failed.' : overall === 'cancelled' ? '⛔ Run cancelled.' : '⏭ Every job was skipped.';
+    var bannerText = overall === 'success' ? t('run.success') : overall === 'failure' ? t('run.failure') : overall === 'cancelled' ? t('run.cancelled') : t('run.allSkipped');
     if (banner) banner.insertAdjacentHTML('beforeend', '<div class="run-banner ' + overall + '">' + bannerText + '</div>');
   }
 
@@ -3235,6 +4041,8 @@ if (typeof module !== 'undefined') module.exports = { MODULES, Y };
   document.getElementById('sidebarToggle').addEventListener('click', function () { layoutEl.classList.toggle('sidebar-open'); });
   document.getElementById('sidebarScrim').addEventListener('click', closeMobileSidebar);
 
+  setLang(detectLang());
+  renderChrome();
   updateProgressUI();
   renderLesson(initialLessonId());
 })();

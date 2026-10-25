@@ -4,7 +4,7 @@
   "description": "An interactive, learngitbranching-style course that teaches GitHub Actions CI/CD, with a real YAML editor and a live pipeline simulator.",
   "private": true,
   "scripts": {
-    "test": "node test/expr.test.js && node test/triggers.test.js && node test/scheduler.test.js && node test/lessons.test.js && node test/run-flow.test.js",
+    "test": "node test/expr.test.js && node test/triggers.test.js && node test/scheduler.test.js && node test/lessons.test.js && node test/run-flow.test.js && node test/i18n.test.js",
     "build": "node scripts/build.js"
   },
   "devDependencies": {

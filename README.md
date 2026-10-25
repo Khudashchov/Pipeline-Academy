@@ -15,12 +15,16 @@ like approving a deployment to a protected environment.
 **[Live page](pipeline-academy.html)** — a single self-contained HTML file, no build step required
 to use it; just open it in a browser.
 
+Available in **English and Ukrainian (українська)**: the page follows the browser language, and the
+УКР / ENG button in the top bar switches at any time (the choice is remembered).
+
 ## How it's built
 
 ```
 src/
   engine/    expr.js, triggers.js, scheduler.js   — the GitHub Actions simulation
-  lessons/   lessons.js, helpers.js                — the curriculum and its grading helpers
+  lessons/   lessons.js, lessons.uk.js, helpers.js — the curriculum, its Ukrainian translation, grading helpers
+  i18n/      i18n.js                               — UI strings (EN/UK) and language switching
   ui/        app.js, highlight.js, style.css       — the browser interface
 scripts/     build.js                              — bundles src/ into pipeline-academy.html
 test/        *.test.js                             — unit and curriculum tests
@@ -39,6 +43,9 @@ test/        *.test.js                             — unit and curriculum tests
   solution YAML, hints, and a set of grading checks.
 - `ui/app.js` — the UI: editor, sidebar navigation, checklist grading, and the run/animation engine.
 - `ui/style.css` — the design system (an industrial "pipeline signage" palette, IBM Plex Sans/Mono).
+- `lessons/lessons.uk.js` — Ukrainian text for every module and lesson (titles, intros, hints,
+  checklist labels, scenarios), keyed by id; YAML starters/solutions are shared with English.
+- `i18n/i18n.js` — the English and Ukrainian UI string catalog, `t()` lookup, and language detection.
 - `scripts/build.js` — concatenates the modules above into the single published `pipeline-academy.html`.
 
 ## Development
@@ -49,6 +56,9 @@ npm test           # runs the unit tests for the expression evaluator, trigger l
                     # and verifies every lesson's solution actually satisfies its own checklist
 npm run build       # rebuilds pipeline-academy.html from the source modules
 ```
+
+When you add or change a lesson, update its entry in `lessons.uk.js` too — `test/i18n.test.js`
+fails if the Ukrainian hints, checklist labels or scenarios fall out of step with the English.
 
 Edit the source modules in `src/` (not `pipeline-academy.html` directly — it's generated), run `npm test`,
 then `npm run build`.

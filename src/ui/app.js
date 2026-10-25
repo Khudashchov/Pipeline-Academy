@@ -47,7 +47,7 @@
         var idx = steps.length - 1;
         var last = steps[idx] || {};
         var label = last.name || (last.run ? String(last.run).split('\n')[0] : 'step');
-        return { stepIndex: idx, message: label + ' exited with a non-zero status.' };
+        return { stepIndex: idx, message: t('run.stepFailed', { step: label }) };
       }
       if (ov.forceFailMatrix && ov.forceFailMatrix.jobKey === jobKey && matrixVals) {
         var match = ov.forceFailMatrix.match;
@@ -120,16 +120,39 @@
     return (lesson.scenarios && lesson.scenarios.length) ? lesson.scenarios : [{ id: 'default', label: 'Push to main', event: { name: 'push', refName: 'main' } }];
   }
 
+  function scenarioLabel(lesson, s) {
+    if (!lesson.scenarios || !lesson.scenarios.length) return t('run.defaultScenario');
+    return localized(lesson, 'scenarios', s.id) || s.label;
+  }
+
+  function triggerReason(trig) { return trig.code ? t('trig.' + trig.code, trig.params) : trig.reason; }
+
+  /* ---------------- Static page chrome ---------------- */
+  var langBtn = document.getElementById('langToggle');
+  function renderChrome() {
+    document.title = t('doc.title');
+    document.getElementById('sidebarToggle').innerHTML = t('top.modules');
+    document.getElementById('labNote').textContent = t('labNote');
+    langBtn.textContent = t('top.langSwitch');
+    langBtn.title = t('top.langSwitchTitle');
+  }
+  langBtn.addEventListener('click', function () {
+    setLang(getLang() === 'uk' ? 'en' : 'uk');
+    runToken++;
+    renderChrome();
+    renderLesson(currentId);
+  });
+
   /* ---------------- Sidebar ---------------- */
   function renderSidebar() {
     var html = '';
     MODULES.forEach(function (m, mi) {
-      html += '<div class="module-group"><div class="module-head"><span class="module-num">' + (mi) + '</span><span>' + escapeHtml(m.title) + '</span></div>';
+      html += '<div class="module-group"><div class="module-head"><span class="module-num">' + (mi) + '</span><span>' + escapeHtml(localized(m, 'title')) + '</span></div>';
       m.lessons.forEach(function (l) {
         var done = progress.has(l.id);
         var active = l.id === currentId;
         html += '<button type="button" class="lesson-link' + (done ? ' done' : '') + (active ? ' active' : '') + '" data-lesson="' + l.id + '">' +
-          '<span class="dot">' + (done ? '✓' : '') + '</span><span class="label">' + escapeHtml(l.title) + '</span></button>';
+          '<span class="dot">' + (done ? '✓' : '') + '</span><span class="label">' + escapeHtml(localized(l, 'title')) + '</span></button>';
       });
       html += '</div>';
     });
@@ -162,22 +185,22 @@
     safeSet(LAST_KEY, id);
     try { history.replaceState(null, '', '#' + id); } catch (e) {}
 
-    var tipHtml = lesson.tip ? '<p class="tip">' + lesson.tip + '</p>' : '';
+    var tipHtml = lesson.tip ? '<p class="tip">' + localized(lesson, 'tip') + '</p>' : '';
     var scenarioChips = scenarios.map(function (s, i) {
-      return '<button type="button" class="chip' + (i === 0 ? ' active' : '') + '" data-scenario="' + s.id + '">' + escapeHtml(s.label) + '</button>';
+      return '<button type="button" class="chip' + (i === 0 ? ' active' : '') + '" data-scenario="' + s.id + '">' + escapeHtml(scenarioLabel(lesson, s)) + '</button>';
     }).join('');
 
     mainEl.innerHTML =
-      '<div class="lesson-eyebrow">Module ' + entry.mi + ' &middot; ' + escapeHtml(mod.title) + ' &middot; Lesson ' + (entry.li + 1) + '</div>' +
-      '<h1 class="lesson-title">' + escapeHtml(lesson.title) + '</h1>' +
-      '<div class="mission-banner"><span class="mission-label">Mission</span><span class="mission-text">' + escapeHtml(lesson.objective) + '</span></div>' +
-      '<div class="lesson-intro">' + lesson.intro + tipHtml + '</div>' +
+      '<div class="lesson-eyebrow">' + t('lesson.eyebrow', { mi: entry.mi, module: escapeHtml(localized(mod, 'title')), li: entry.li + 1 }) + '</div>' +
+      '<h1 class="lesson-title">' + escapeHtml(localized(lesson, 'title')) + '</h1>' +
+      '<div class="mission-banner"><span class="mission-label">' + t('lesson.mission') + '</span><span class="mission-text">' + escapeHtml(localized(lesson, 'objective')) + '</span></div>' +
+      '<div class="lesson-intro">' + localized(lesson, 'intro') + tipHtml + '</div>' +
       '<div class="workbench">' +
         '<div class="pane editor-pane">' +
           '<div class="pane-header"><span>workflow.yml</span><div class="editor-actions">' +
-            '<button class="btn btn-ghost btn-sm" id="hintBtn" type="button">Hint</button>' +
-            '<button class="btn btn-ghost btn-sm" id="resetBtn" type="button">Reset</button>' +
-            '<button class="btn btn-ghost btn-sm" id="solutionBtn" type="button">Reveal solution</button>' +
+            '<button class="btn btn-ghost btn-sm" id="hintBtn" type="button">' + t('editor.hint') + '</button>' +
+            '<button class="btn btn-ghost btn-sm" id="resetBtn" type="button">' + t('editor.reset') + '</button>' +
+            '<button class="btn btn-ghost btn-sm" id="solutionBtn" type="button">' + t('editor.solution') + '</button>' +
           '</div></div>' +
           '<div class="editor-wrap">' +
             '<div class="editor-gutter" id="editorGutter"></div>' +
@@ -190,18 +213,18 @@
           '<div class="hint-box" id="hintBox" hidden></div>' +
         '</div>' +
         '<div class="pane run-pane">' +
-          '<div class="pane-header"><span>Simulate a run</span></div>' +
+          '<div class="pane-header"><span>' + t('run.pane') + '</span></div>' +
           '<div class="run-pane-body">' +
             (scenarios.length > 1 ? '<div class="scenario-row" id="scenarioRow">' + scenarioChips + '</div>' : '') +
-            '<button class="btn btn-accent btn-run" id="runBtn" type="button">&#9654; Run pipeline</button>' +
-            '<div class="run-output" id="runOutput"><div class="run-empty">Click Run to see what GitHub Actions would actually do with this file.</div></div>' +
+            '<button class="btn btn-accent btn-run" id="runBtn" type="button">' + t('run.button') + '</button>' +
+            '<div class="run-output" id="runOutput"><div class="run-empty">' + t('run.empty') + '</div></div>' +
           '</div>' +
         '</div>' +
       '</div>' +
       '<div class="checklist-panel">' +
-        '<div class="pane-header"><span>Mission checklist</span><span class="checklist-count" id="checklistCount"></span></div>' +
+        '<div class="pane-header"><span>' + t('check.title') + '</span><span class="checklist-count" id="checklistCount"></span></div>' +
         '<ul class="checklist" id="checklist"></ul>' +
-        '<div class="lesson-complete" id="lessonComplete" hidden><span class="lesson-complete-text">Mission complete.</span><button class="btn btn-accent" id="nextBtn" type="button">Next lesson &rarr;</button></div>' +
+        '<div class="lesson-complete" id="lessonComplete" hidden><span class="lesson-complete-text">' + t('check.complete') + '</span><button class="btn btn-accent" id="nextBtn" type="button">' + t('check.next') + '</button></div>' +
       '</div>';
 
     mainEl.scrollTop = 0; window.scrollTo(0, 0);
@@ -283,15 +306,15 @@
     var api = buildApi(input.value);
     var errorStrip = document.getElementById('errorStrip');
     if (!api.parses) {
-      var msg = api.parseError && api.parseError.message ? api.parseError.message.split('\n')[0] : 'The file could not be parsed.';
-      errorStrip.innerHTML = '<span>&#9888;</span><span>YAML syntax error: ' + escapeHtml(msg) + '</span>';
+      var msg = api.parseError && api.parseError.message ? api.parseError.message.split('\n')[0] : t('editor.unparseable');
+      errorStrip.innerHTML = '<span>&#9888;</span><span>' + t('editor.syntaxError', { msg: escapeHtml(msg) }) + '</span>';
     } else {
       errorStrip.innerHTML = '';
     }
-    var results = lesson.checks.map(function (c) {
+    var results = lesson.checks.map(function (c, i) {
       var pass = false;
       try { pass = !!c.test(api); } catch (e) { pass = false; }
-      return { label: c.label, pass: pass };
+      return { label: localized(lesson, 'checks', i), pass: pass };
     });
     var listEl = document.getElementById('checklist');
     listEl.innerHTML = results.map(function (r) {
@@ -315,11 +338,11 @@
       var next = ALL[idx + 1];
       if (next) {
         nextBtn.hidden = false;
-        nextBtn.textContent = 'Next lesson →';
+        nextBtn.textContent = t('check.next');
         nextBtn.onclick = function () { navigate(next.lesson.id); };
       } else {
         nextBtn.hidden = true;
-        completeBox.querySelector('.lesson-complete-text').textContent = 'Mission complete — you’ve finished the whole curriculum.';
+        completeBox.querySelector('.lesson-complete-text').textContent = t('check.finished');
       }
     } else {
       completeBox.hidden = true;
@@ -334,17 +357,17 @@
       if (!lesson.hints || !lesson.hints.length) return;
       if (hintsRevealed < lesson.hints.length) hintsRevealed++;
       hintBox.hidden = false;
-      hintBox.innerHTML = '<ol>' + lesson.hints.slice(0, hintsRevealed).map(function (h) { return '<li>' + h + '</li>'; }).join('') + '</ol>' +
-        (hintsRevealed < lesson.hints.length ? '' : '<div style="color:var(--muted);font-size:12px;">That\'s every hint for this one.</div>');
-      hintBtn.textContent = hintsRevealed < lesson.hints.length ? 'Another hint' : 'No more hints';
+      hintBox.innerHTML = '<ol>' + lesson.hints.slice(0, hintsRevealed).map(function (h, i) { return '<li>' + localized(lesson, 'hints', i) + '</li>'; }).join('') + '</ol>' +
+        (hintsRevealed < lesson.hints.length ? '' : '<div style="color:var(--muted);font-size:12px;">' + t('editor.allHints') + '</div>');
+      hintBtn.textContent = hintsRevealed < lesson.hints.length ? t('editor.anotherHint') : t('editor.noMoreHints');
     });
 
     var resetBtn = document.getElementById('resetBtn');
     resetBtn.addEventListener('click', function () {
       if (!resetArmed) {
         resetArmed = true;
-        resetBtn.textContent = 'Click again to reset';
-        setTimeout(function () { resetArmed = false; resetBtn.textContent = 'Reset'; }, 3000);
+        resetBtn.textContent = t('editor.resetConfirm');
+        setTimeout(function () { resetArmed = false; resetBtn.textContent = t('editor.reset'); }, 3000);
         return;
       }
       var input = document.getElementById('editorInput');
@@ -353,15 +376,15 @@
       syncEditorVisuals();
       resetEditorScroll();
       runChecklist();
-      resetArmed = false; resetBtn.textContent = 'Reset';
+      resetArmed = false; resetBtn.textContent = t('editor.reset');
     });
 
     var solutionBtn = document.getElementById('solutionBtn');
     solutionBtn.addEventListener('click', function () {
       if (!solutionArmed) {
         solutionArmed = true;
-        solutionBtn.textContent = 'Click again to reveal';
-        setTimeout(function () { solutionArmed = false; solutionBtn.textContent = 'Reveal solution'; }, 3000);
+        solutionBtn.textContent = t('editor.solutionConfirm');
+        setTimeout(function () { solutionArmed = false; solutionBtn.textContent = t('editor.solution'); }, 3000);
         return;
       }
       var input = document.getElementById('editorInput');
@@ -370,7 +393,7 @@
       syncEditorVisuals();
       resetEditorScroll();
       runChecklist();
-      solutionArmed = false; solutionBtn.textContent = 'Reveal solution';
+      solutionArmed = false; solutionBtn.textContent = t('editor.solution');
     });
 
     document.getElementById('runBtn').addEventListener('click', function () { doRun(lesson); });
@@ -402,7 +425,7 @@
       return '<li data-step="1" class="pending"><span class="mk">' + stepGlyph('pending') + '</span><span class="t">' + escapeHtml(s.name) + '</span></li>';
     }).join('');
     return '<div class="dag-node" data-status="pending" data-node="' + node.id + '">' +
-      '<div class="dag-node-head"><span class="dag-node-name">' + escapeHtml(node.label) + '</span><span class="status-pill pending">queued</span></div>' +
+      '<div class="dag-node-head"><span class="dag-node-name">' + escapeHtml(node.label) + '</span><span class="status-pill pending">' + t('status.queued') + '</span></div>' +
       (node.matrixLabel ? '<div class="dag-node-matrix">' + escapeHtml(node.matrixLabel) + '</div>' : '') +
       '<ul class="step-list">' + stepsHtml + '</ul>' +
       '<div class="approve-slot"></div>' +
@@ -415,7 +438,7 @@
     var levelKeys = Object.keys(byLevel).map(Number).sort(function (a, b) { return a - b; });
     var html = '<div class="dag" id="dagRoot"><div id="dagBanner"></div>';
     levelKeys.forEach(function (lvl, i) {
-      if (i > 0) html += '<div class="dag-arrow">↓ then</div>';
+      if (i > 0) html += '<div class="dag-arrow">' + t('run.then') + '</div>';
       html += '<div class="dag-level">' + byLevel[lvl].map(renderNodeSkeleton).join('') + '</div>';
     });
     html += '</div><div class="console" id="consoleEl"></div>';
@@ -440,8 +463,8 @@
   }
 
   function skipReason(node) {
-    if (node.ifExpr) return 'if: ' + node.ifExpr + ' evaluated to false.';
-    return 'A required job did not succeed.';
+    if (node.ifExpr) return t('run.skipIf', { expr: node.ifExpr });
+    return t('run.skipNeeds');
   }
 
   async function animateNode(outputEl, consoleEl, node, scenario, myToken) {
@@ -450,20 +473,20 @@
     if (!el) return;
 
     if (node.status === 'skipped') {
-      setNodeStatus(outputEl, node, 'skipped', 'skipped');
+      setNodeStatus(outputEl, node, 'skipped', t('status.skipped'));
       el.querySelectorAll('.step-list li').forEach(function (li) { li.className = 'skipped'; li.querySelector('.mk').textContent = stepGlyph('skipped'); });
-      appendLog(consoleEl, '⏭  ' + node.label + ' skipped — ' + skipReason(node), 'dim');
+      appendLog(consoleEl, t('run.jobSkipped', { job: node.label, reason: skipReason(node) }), 'dim');
       return;
     }
     if (node.status === 'cancelled') {
-      setNodeStatus(outputEl, node, 'cancelled', 'cancelled');
+      setNodeStatus(outputEl, node, 'cancelled', t('status.cancelled'));
       el.querySelectorAll('.step-list li').forEach(function (li) { li.className = 'skipped'; li.querySelector('.mk').textContent = stepGlyph('skipped'); });
-      appendLog(consoleEl, '⛔  ' + node.label + ' cancelled', 'dim');
+      appendLog(consoleEl, t('run.jobCancelled', { job: node.label }), 'dim');
       return;
     }
 
-    setNodeStatus(outputEl, node, 'running', 'running');
-    appendLog(consoleEl, '▶  Job: ' + node.label + (node.matrixLabel ? ' (' + node.matrixLabel + ')' : ''), 'sys');
+    setNodeStatus(outputEl, node, 'running', t('status.running'));
+    appendLog(consoleEl, t('run.jobStart', { job: node.label + (node.matrixLabel ? ' (' + node.matrixLabel + ')' : '') }), 'sys');
 
     var stepLis = el.querySelectorAll('.step-list li');
     var failed = false;
@@ -487,21 +510,21 @@
       }
     }
 
-    if (failed) { setNodeStatus(outputEl, node, 'failure', 'failed'); return; }
+    if (failed) { setNodeStatus(outputEl, node, 'failure', t('status.failed')); return; }
 
     if (node.environment && scenario.overrides && scenario.overrides.protectedEnvironments && scenario.overrides.protectedEnvironments.indexOf(node.environment) !== -1) {
-      setNodeStatus(outputEl, node, 'waiting', 'needs approval');
-      appendLog(consoleEl, '⏸  Waiting for approval to deploy to ' + node.environment + '…', 'sys');
+      setNodeStatus(outputEl, node, 'waiting', t('status.approval'));
+      appendLog(consoleEl, t('run.waiting', { env: node.environment }), 'sys');
       var slot = el.querySelector('.approve-slot');
-      slot.innerHTML = '<div class="approve-row"><span>Environment: <strong>' + escapeHtml(node.environment) + '</strong></span><button class="btn btn-accent btn-sm" type="button">Approve</button></div>';
+      slot.innerHTML = '<div class="approve-row"><span>' + t('run.environment') + ' <strong>' + escapeHtml(node.environment) + '</strong></span><button class="btn btn-accent btn-sm" type="button">' + t('run.approve') + '</button></div>';
       await new Promise(function (resolve) {
         slot.querySelector('button').addEventListener('click', function () { slot.innerHTML = ''; resolve(); }, { once: true });
       });
       if (runToken !== myToken) return;
-      appendLog(consoleEl, '✓  Deployment to ' + node.environment + ' approved', 'sys');
+      appendLog(consoleEl, t('run.approved', { env: node.environment }), 'sys');
     }
 
-    setNodeStatus(outputEl, node, 'success', 'success');
+    setNodeStatus(outputEl, node, 'success', t('status.success'));
   }
 
   function canned(step) {
@@ -528,8 +551,8 @@
     var myToken = ++runToken;
 
     if (!api.parses) {
-      var msg = api.parseError && api.parseError.message ? api.parseError.message : 'The file does not parse.';
-      outputEl.innerHTML = '<div class="trigger-skip"><strong>Can\'t run — YAML syntax error.</strong>' + escapeHtml(msg.split('\n')[0]) + '</div>';
+      var msg = api.parseError && api.parseError.message ? api.parseError.message : t('run.noParse');
+      outputEl.innerHTML = '<div class="trigger-skip"><strong>' + t('run.cantRun') + '</strong>' + escapeHtml(msg.split('\n')[0]) + '</div>';
       return;
     }
 
@@ -538,23 +561,23 @@
     var event = scenario.event || { name: 'push', refName: 'main' };
     var trig = evaluateTrigger(api.parsed.on, event);
     if (!trig.fires) {
-      outputEl.innerHTML = '<div class="trigger-skip"><strong>Workflow did not run.</strong>' + escapeHtml(trig.reason) + '</div>';
+      outputEl.innerHTML = '<div class="trigger-skip"><strong>' + t('run.didNotRun') + '</strong>' + escapeHtml(triggerReason(trig)) + '</div>';
       return;
     }
 
     var ctx = buildContext(api.parsed, event);
     var plan;
     try { plan = planRun(api.parsed, ctx, genericFaultHook(scenario)); }
-    catch (e) { outputEl.innerHTML = '<div class="trigger-skip"><strong>Could not build the job graph.</strong>' + escapeHtml(e.message) + '</div>'; return; }
+    catch (e) { outputEl.innerHTML = '<div class="trigger-skip"><strong>' + t('run.noGraph') + '</strong>' + escapeHtml(e.message) + '</div>'; return; }
 
     if (plan.nodes.length === 0) {
-      outputEl.innerHTML = '<div class="trigger-skip"><strong>Workflow triggers, but defines no jobs yet.</strong>Add at least one job under <code>jobs:</code>.</div>';
+      outputEl.innerHTML = '<div class="trigger-skip"><strong>' + t('run.noJobs') + '</strong>' + t('run.noJobsHint') + '</div>';
       return;
     }
 
     outputEl.innerHTML = renderDagSkeleton(plan);
     var consoleEl = document.getElementById('consoleEl');
-    appendLog(consoleEl, '# ' + trig.reason, 'sys');
+    appendLog(consoleEl, '# ' + triggerReason(trig), 'sys');
 
     var byLevel = {};
     plan.nodes.forEach(function (n) { (byLevel[n.level] = byLevel[n.level] || []).push(n); });
@@ -569,10 +592,10 @@
         supersededCancel = cancelInProgress;
         var banner = document.getElementById('dagBanner');
         if (banner) {
-          banner.innerHTML = '<div class="run-banner skip" style="margin-bottom:10px;">⚡ A newer commit landed on the same branch while this run was still going' +
-            (cancelInProgress ? ' — cancelling the rest of this run.' : ' — and because cancel-in-progress isn’t set, both runs are now racing.') + '</div>';
+          banner.innerHTML = '<div class="run-banner skip" style="margin-bottom:10px;">' + t('run.superseded') +
+            (cancelInProgress ? t('run.supersededCancel') : t('run.supersededRace')) + '</div>';
         }
-        appendLog(consoleEl, cancelInProgress ? 'A newer run superseded this one. Cancelling remaining jobs.' : 'Warning: a second run has started for the same ref. No cancellation configured.', 'sys');
+        appendLog(consoleEl, cancelInProgress ? t('run.logCancel') : t('run.logRace'), 'sys');
       }, 1300);
     }
 
@@ -596,7 +619,7 @@
       : finalStatuses.every(function (s) { return s === 'skipped'; }) ? 'skip'
       : 'success';
     var banner = document.getElementById('dagBanner');
-    var bannerText = overall === 'success' ? '✓ Run completed successfully.' : overall === 'failure' ? '✗ Run failed.' : overall === 'cancelled' ? '⛔ Run cancelled.' : '⏭ Every job was skipped.';
+    var bannerText = overall === 'success' ? t('run.success') : overall === 'failure' ? t('run.failure') : overall === 'cancelled' ? t('run.cancelled') : t('run.allSkipped');
     if (banner) banner.insertAdjacentHTML('beforeend', '<div class="run-banner ' + overall + '">' + bannerText + '</div>');
   }
 
@@ -614,6 +637,8 @@
   document.getElementById('sidebarToggle').addEventListener('click', function () { layoutEl.classList.toggle('sidebar-open'); });
   document.getElementById('sidebarScrim').addEventListener('click', closeMobileSidebar);
 
+  setLang(detectLang());
+  renderChrome();
   updateProgressUI();
   renderLesson(initialLessonId());
 })();
